@@ -1,28 +1,27 @@
 #!/bin/bash
 set -euo pipefail
 
-# Configuration
+# === Config ===
 export DISTRO_NAME="Archy"
-export WORKDIR="$PWD/archy-build"
-export ISOFILE="$PWD/Archy.iso"
+export ARCH="${ARCH:-amd64}"
+export WORKDIR="$PWD/archy-build-$ARCH"
+export ISOFILE="$PWD/Archy-$ARCH.iso"
+export DEBIAN_URL="http://deb.debian.org/debian"
 
-# Clean previous build
+# === Clean old build ===
 sudo rm -rf "$WORKDIR"
 
-# ==========================================
-# 1. Create Minimal Base System
-# ==========================================
-echo "[1/5] Creating minimal base system..."
+echo "[1/5] 🧱 Creating minimal base system..."
 sudo debootstrap \
+    --arch="$ARCH" \
     --variant=minbase \
     --exclude=debian-archive-keyring,debian-faq,debian-reference \
-    --include=apt,dpkg,linux-image-amd64 \
-    unstable "$WORKDIR" http://deb.debian.org/debian
+    --include=apt,dpkg,linux-image-$ARCH \
+    unstable "$WORKDIR" "$DEBIAN_URL"
 
-# ==========================================
-# 2. System Config + GRUB Theme + Scripts
-# ==========================================
-echo "[2/5] Configuring Archy system and branding..."
+# === System Config & Branding ===
+echo "[2/5] 🎨 Configuring Archy system and branding..."
+
 sudo chroot "$WORKDIR" /bin/bash <<'EOF'
 set -e
 
@@ -35,12 +34,10 @@ rm -f /etc/{issue,issue.net,os-release,motd}
 apt update
 apt install -y --no-install-recommends \
     bash coreutils systemd udev sudo nano less grub2 \
-    network-manager wget curl fdisk parted locales
+    network-manager wget curl fdisk parted locales apt-listbugs
 
 # APT sources
-cat > /etc/apt/sources.list <<EOL
-deb http://deb.debian.org/debian unstable main
-EOL
+echo "deb http://deb.debian.org/debian unstable main" > /etc/apt/sources.list
 
 # === archy-install ===
 cat > /usr/bin/archy-install <<'INSTALL'
@@ -101,18 +98,16 @@ arch-chroot /mnt /bin/bash <<CHROOT
 echo "Archy" > /etc/hostname
 ln -sf /usr/share/zoneinfo/UTC /etc/localtime
 apt update
-apt install -y linux-image-amd64 grub-efi-amd64
-grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=Archy
+apt install -y linux-image-$ARCH grub-efi-$ARCH sudo bash nano less network-manager apt-listbugs
+
+grub-install --target=${ARCH}-efi --efi-directory=/boot/efi --bootloader-id=Archy
 echo 'GRUB_THEME="/boot/grub/themes/archy/theme.txt"' >> /etc/default/grub
 update-grub
 
 useradd -m -G sudo -s /bin/bash user
 echo "user:password" | chpasswd
-
-# Enable services
 systemctl enable NetworkManager
 
-# Setup locale
 echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
 locale-gen
 update-locale LANG=en_US.UTF-8
@@ -126,22 +121,47 @@ timedatectl set-ntp true
 apt update && apt upgrade -y
 echo "System initialized."
 INIT
-
 chmod +x /usr/bin/archy-init
+
+# === archy-upgrade ===
+cat > /usr/bin/archy-upgrade <<'UPGRADE'
+#!/bin/bash
+set -e
+echo -e "\033[1;34mArchy Upgrade Script - Stay Bleeding 🌊\033[0m"
+echo "[*] Updating package lists..."
+sudo apt update
+echo "[*] Listing upgradable packages..."
+apt list --upgradable
+echo "[?] Do you want to upgrade your system now? (y/N)"
+read -r confirm
+if [[ "\$confirm" =~ ^[Yy]$ ]]; then
+    echo "[] Performing full-upgrade (this *can break stuff)..."
+    sudo apt full-upgrade -y
+    echo "[✔] System upgraded. Reboot recommended."
+else
+    echo "[!] Upgrade cancelled. No changes made."
+fi
+UPGRADE
+chmod +x /usr/bin/archy-upgrade
+
+# === Aliases ===
+echo "alias au='sudo archy-upgrade'" >> /etc/skel/.bashrc
+echo "alias ai='sudo apt install'" >> /etc/skel/.bashrc
+echo "alias ar='sudo apt remove'" >> /etc/skel/.bashrc
+echo "alias as='apt search'" >> /etc/skel/.bashrc
+echo "alias auh='apt update && apt list --upgradable'" >> /etc/skel/.bashrc
+
 CHROOT
 
 echo "Install complete. Reboot after removing media."
 INSTALL
-
 chmod +x /usr/bin/archy-install
 
 # === GRUB Theme ===
 mkdir -p /boot/grub/themes/archy
+cp /background.png /boot/grub/themes/archy/
+cp /logo.png /boot/grub/themes/archy/
 
-# Background
-wget -O /boot/grub/themes/archy/background.png https://i.imgur.com/jNNT4LE.png
-
-# Theme config
 cat > /boot/grub/themes/archy/theme.txt <<THEME
 title-text: "Archy Linux"
 title-color: "cyan"
@@ -160,16 +180,20 @@ desktop-image: "background.png"
     item_bg_color = "black"
     selected_item_bg_color = "cyan"
 }
+
++ image {
+    filename = "logo.png"
+    x = 5%
+    y = 5%
+}
 THEME
 
 echo 'GRUB_THEME="/boot/grub/themes/archy/theme.txt"' >> /etc/default/grub
 update-grub
 EOF
 
-# ==========================================
-# 3. ISO Creation
-# ==========================================
-echo "[3/5] Creating ISO..."
+# === ISO Creation ===
+echo "[3/5] 📀 Creating ISO..."
 sudo chroot "$WORKDIR" /bin/bash <<'EOF'
 apt install -y --no-install-recommends syslinux isolinux live-boot
 
@@ -191,12 +215,10 @@ xorriso -as mkisofs -o /Archy.iso -b boot/isolinux/isolinux.bin \
   -boot-info-table -J -R /iso
 EOF
 
-# ==========================================
-# 4. Finalize
-# ==========================================
-echo "[4/5] Finalizing..."
+# === Finalize ===
+echo "[4/5] 🧹 Finalizing..."
 sudo mv "$WORKDIR/Archy.iso" "$ISOFILE"
 sudo rm -rf "$WORKDIR"
 
-echo "✅ Build complete! ISO saved to: $ISOFILE"
+echo "[5/5] ✅ Archy ISO ready: $ISOFILE"
 echo "💡 Test with: qemu-system-x86_64 -cdrom $ISOFILE -m 2G"
