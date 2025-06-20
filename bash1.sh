@@ -55,6 +55,13 @@ for mnt in dev dev/pts proc sys run; do
     mount --bind "/$mnt" "$WORKDIR/$mnt"
 done
 
+# Set user/root password after mounts are active
+echo "[*] Setting user/root passwords..."
+chroot "$WORKDIR" /bin/bash -c "
+echo 'user:archy' | chpasswd
+echo 'root:archy' | chpasswd
+"
+
 # ---- SYSTEM CONFIGURATION ----
 echo "[3/6] Configuring system..."
 chroot "$WORKDIR" /bin/bash <<EOT
@@ -83,9 +90,6 @@ HOME_URL="https://archy.org"
 SUPPORT_URL="https://archy.org/support"
 BUG_REPORT_URL="https://archy.org/bugs"
 EOF
-
-echo "user:archy" | chpasswd
-echo "root:archy" | chpasswd
 
 echo "Archy 1.0 \\n \\l" > /etc/issue
 cp /etc/issue /etc/issue.net
