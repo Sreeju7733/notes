@@ -202,17 +202,8 @@ echo "MODULES=most" > /etc/initramfs-tools/conf.d/modules.conf
 # Disable device mapper verification
 echo "DEVICE_MAPPER=no" > /etc/initramfs-tools/conf.d/dm.conf
 
-# Create a fake root device to satisfy initramfs tools
-mkdir -p /root-tmp
-mount -t tmpfs tmpfs /root-tmp
-touch /root-tmp/root_device
-
 # Update initramfs with workaround
 update-initramfs -u -k all
-
-# Cleanup fake root
-umount /root-tmp
-rm -rf /root-tmp
 EOT
 
 # ---- PREPARE LIVE SYSTEM ----
@@ -247,8 +238,18 @@ mkdir -p "$ISO_DIR"/{live,boot/grub}
 # Copy kernel and initrd
 VMLINUZ=$(find "$WORKDIR/boot" -name vmlinuz-* -print -quit)
 INITRD=$(find "$WORKDIR/boot" -name initrd.img-* -print -quit)
-[ -n "$VMLINUZ" ] && cp "$VMLINUZ" "$ISO_DIR/live/vmlinuz"
-[ -n "$INITRD" ] && cp "$INITRD" "$ISO_DIR/live/initrd.img"
+
+if [ -f "$VMLINUZ" ]; then
+    cp -v "$VMLINUZ" "$ISO_DIR/live/vmlinuz"
+else
+    echo "⚠️ Warning: vmlinuz not found in $WORKDIR/boot"
+fi
+
+if [ -f "$INITRD" ]; then
+    cp -v "$INITRD" "$ISO_DIR/live/initrd.img"
+else
+    echo "⚠️ Warning: initrd.img not found in $WORKDIR/boot"
+fi
 
 # Create GRUB configuration
 cat > "$ISO_DIR/boot/grub/grub.cfg" <<'EOF'
@@ -267,12 +268,38 @@ menuentry "Archy Linux (Install)" {
 EOF
 
 # ---- BUILD ISO ----
-echo "[*] Generating ISO image..."
-grub-mkrescue -o "$ISOFILE" "$ISO_DIR" --volid="ARCHY_LIVE" 2>/dev/null
+echo "[*] Generating ISO image (this may take several minutes)..."
+if grub-mkrescue -o "$ISOFILE" "$ISO_DIR" --volid="ARCHY_LIVE"; then
+    echo "✅ ISO creation successful!"
+else
+    echo "❌ ISO creation failed. Trying alternative method..."
+    xorriso -as mkisofs \
+        -r -V "ARCHY_LIVE" \
+        -o "$ISOFILE" \
+        -b boot/grub/efi.img \
+        -no-emul-boot \
+        -boot-load-size 4 \
+        -boot-info-table \
+        --efi-boot boot/grub/efi.img \
+        --protective-msdos-label \
+        "$ISO_DIR"
+fi
 
-# ---- CLEANUP ----
-umount -R "$WORKDIR" 2>/dev/null || true
-rm -rf "$WORKDIR"
+# ---- FINAL CLEANUP ----
+echo "[*] Cleaning up build environment..."
+{
+    umount -R "$WORKDIR" 2>/dev/null || true
+    rm -rf "$WORKDIR"
+} && echo "✅ Cleanup complete!"
 
-echo -e "\n\033[1;32m✅ Successfully created: $ISOFILE\033[0m"
-echo -e "Test with: \033[1;36mqemu-system-x86_64 -cdrom \"$ISOFILE\" -m 2G\033[0m"
+# ---- VERIFICATION ----
+if [ -f "$ISOFILE" ]; then
+    ISO_SIZE=$(du -h "$ISOFILE" | cut -f1)
+    echo -e "\n\033[1;32m🎉 Successfully created Archy Linux ISO!\033[0m"
+    echo -e "   File: \033[1;34m$ISOFILE\033[0m"
+    echo -e "   Size: \033[1;34m$ISO_SIZE\033[0m"
+    echo -e "\n💡 Test with: \033[1;36mqemu-system-x86_64 -cdrom \"$ISOFILE\" -m 2G\033[0m"
+else
+    echo -e "\n\033[1;31m❌ ISO creation failed. Check output for errors.\033[0m"
+    exit 1
+fi
