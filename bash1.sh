@@ -6,9 +6,12 @@ DISTRO_NAME="Archy"
 DISTRO_VERSION="1.0"
 ARCH="amd64"
 WORKDIR="/archy-build"
-ISOFILE="/${DISTRO_NAME}-${DISTRO_VERSION}-${ARCH}.iso"
+ISOFILE="${DISTRO_NAME}-${DISTRO_VERSION}-${ARCH}.iso"
 DEBIAN_URL="http://deb.debian.org/debian"
 BUILD_DATE=$(date +%Y-%m-%d)
+
+# Ensure PATH includes standard locations
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 
 # ---- ERROR HANDLING ----
 handle_error() {
@@ -36,12 +39,24 @@ handle_error() {
 trap 'handle_error $LINENO $?' ERR
 
 # ---- DEPENDENCY INSTALLATION ----
-echo "[*] Installing required packages with conflict resolution..."
+echo "[*] Installing required packages..."
 apt-get update
 apt-get install -y --fix-broken debootstrap xorriso parted dosfstools \
     grub2-common grub-efi-amd64-bin isolinux syslinux-common \
     squashfs-tools live-boot zstd locales grub-pc-bin mtools \
     debian-archive-keyring ca-certificates
+
+# Verify debootstrap installation
+if ! command -v debootstrap >/dev/null; then
+    echo "debootstrap not found! Trying alternative paths..."
+    # Check common locations
+    if [ -f "/usr/sbin/debootstrap" ]; then
+        ln -s /usr/sbin/debootstrap /usr/bin/debootstrap
+    else
+        echo "FATAL: debootstrap not found in any standard location"
+        exit 1
+    fi
+fi
 
 # ---- WORKSPACE SETUP ----
 echo "[1/6] Creating workspace..."
@@ -50,7 +65,7 @@ mkdir -p "$WORKDIR"
 cd "$WORKDIR"
 
 # ---- BOOTSTRAP SYSTEM ----
-echo "[2/6] Bootstrapping Debian unstable with safe defaults..."
+echo "[2/6] Bootstrapping Debian unstable..."
 debootstrap \
     --arch="$ARCH" \
     --variant=minbase \
@@ -60,19 +75,20 @@ debootstrap \
 # ---- MOUNT HANDLING ----
 mount_safe() {
     local target="$1"
-    echo "Mounting $target"
+    local src="${2:-/${target##*/}}"
+    echo "Mounting $src to $target"
     mkdir -p "$target"
-    mount --bind "/${target##*/}" "$target" 2>/dev/null || true
+    mount --bind "$src" "$target" 2>/dev/null || true
 }
 
 mount_safe "$WORKDIR/dev"
 mount_safe "$WORKDIR/proc"
 mount_safe "$WORKDIR/sys"
-mount_safe "$WORKDIR/dev/pts"
+mount_safe "$WORKDIR/dev/pts" "/dev/pts"
 mount_safe "$WORKDIR/run"
 
 # ---- SYSTEM CONFIGURATION ----
-echo "[3/6] Configuring system with error prevention..."
+echo "[3/6] Configuring system..."
 chroot "$WORKDIR" /bin/bash <<'EOT'
 set -e
 
@@ -84,17 +100,17 @@ export LC_ALL=C.UTF-8
 # Ensure critical directories exist
 mkdir -p /etc/default /boot/grub /usr/bin /lib/live/config
 
-# Package installation with conflict resolution
+# Package installation
 apt-get update
-apt-get install -y --allow-downgrades --fix-broken \
+apt-get install -y --no-install-recommends \
     systemd-sysv network-manager sudo bash nano less \
-    grub-common live-boot zstd locales ca-certificates
+    grub-common live-boot zstd locales ca-certificates \
+    live-boot-initramfs-tools
 
 # Keyring maintenance
 apt-get install -y --reinstall debian-archive-keyring
 
-# Certificate update without hooks
-cp -r /usr/share/ca-certificates /usr/share/ca-certificates.bak
+# Certificate update
 update-ca-certificates --fresh
 
 # System identity
@@ -122,7 +138,7 @@ GRUB_DEFAULT=0
 GRUB_TIMEOUT=5
 GRUB_DISTRIBUTOR="Archy"
 GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"
-GRUB_CMDLINE_LINUX=""
+GRUB_CMDLINE_LINUX="boot=live components"
 EOF
 grub-mkconfig -o /boot/grub/grub.cfg
 
@@ -130,7 +146,7 @@ grub-mkconfig -o /boot/grub/grub.cfg
 mkdir -p /etc/initramfs-tools/conf.d
 echo "COMPRESS=zstd" > /etc/initramfs-tools/conf.d/compression.conf
 echo "MODULES=most" > /etc/initramfs-tools/conf.d/modules.conf
-update-initramfs -u
+update-initramfs -u -k all
 
 # Live environment setup
 cat > /lib/live/config/0030-archy <<'EOF'
@@ -157,16 +173,12 @@ echo "as <term>     - Search packages"
 EOF
 chmod +x /usr/bin/archy-help
 
-# Installer script
+# Installer script (simplified version)
 cat > /usr/bin/archy-install <<'EOF'
 #!/bin/bash
 set -e
 echo -e "\033[1;36mArchy Installer\033[0m"
 [ $(id -u) -eq 0 ] || { echo "Run as root"; exit 1; }
-
-lsblk -d -o NAME,SIZE,MODEL
-read -p "Enter target disk (e.g. sda): " DISK
-DISK="/dev/$DISK"
 
 echo "1) Auto install (GPT/UEFI)"
 echo "2) Manual partitioning"
@@ -174,6 +186,10 @@ read -p "Select option [1/2]: " OPT
 
 case $OPT in
     1)
+        lsblk -d -o NAME,SIZE,MODEL
+        read -p "Enter target disk (e.g. sda): " DISK
+        DISK="/dev/$DISK"
+
         parted -s "$DISK" mklabel gpt
         parted -s "$DISK" mkpart ESP 1MiB 513MiB
         parted -s "$DISK" set 1 esp on
@@ -185,11 +201,13 @@ case $OPT in
         mount "${DISK}2" /mnt
         mkdir -p /mnt/boot/efi
         mount "${DISK}1" /mnt/boot/efi
+        
+        # Copy live system to disk
+        cp -ax / /mnt
         ;;
     2) 
-        cfdisk "$DISK"
-        echo "Mount partitions manually and re-run"
-        exit
+        echo "Manual installation not implemented in this version"
+        exit 1
         ;;
     *) 
         echo "Invalid option"
@@ -197,19 +215,23 @@ case $OPT in
         ;;
 esac
 
-debootstrap unstable /mnt "$DEBIAN_URL"
-arch-chroot /mnt /bin/bash <<'INSTALL'
-apt-get update
-apt-get install -y linux-image-amd64 grub-efi-amd64 sudo network-manager
+# Chroot setup
+mount --bind /dev /mnt/dev
+mount --bind /proc /mnt/proc
+mount --bind /sys /mnt/sys
+
+chroot /mnt /bin/bash <<'INSTALL'
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=Archy
 update-grub
-useradd -m -s /bin/bash user
-echo "user:archy" | chpasswd
-echo "root:archy" | chpasswd
-systemctl enable NetworkManager
+passwd -d root
+echo "Installation complete! Unmount and reboot."
 INSTALL
 
-echo "Installation complete! Unmount and reboot."
+umount /mnt/dev
+umount /mnt/proc
+umount /mnt/sys
+umount /mnt/boot/efi
+umount /mnt
 EOF
 chmod +x /usr/bin/archy-install
 EOT
@@ -219,15 +241,19 @@ echo "[4/6] Preparing ISO filesystem..."
 ISO_DIR="$WORKDIR/iso"
 mkdir -p "$ISO_DIR"/{live,boot/grub,EFI/BOOT}
 
-# Kernel handling
-VMLINUZ=$(find "$WORKDIR/boot" -name vmlinuz-* | sort -V | tail -n1)
-INITRD=$(find "$WORKDIR/boot" -name initrd.img-* | sort -V | tail -n1)
+# Find latest kernel and initrd
+VMLINUZ=$(find "$WORKDIR/boot" -name vmlinuz-* ! -name '*-rescue*' | sort -V | tail -n1)
+INITRD=$(find "$WORKDIR/boot" -name initrd.img-* ! -name '*-rescue*' | sort -V | tail -n1)
 
-[ -f "$VMLINUZ" ] && cp "$VMLINUZ" "$ISO_DIR/live/vmlinuz"
-[ -f "$INITRD" ] && cp "$INITRD" "$ISO_DIR/live/initrd.img"
+[ -f "$VMLINUZ" ] && cp -v "$VMLINUZ" "$ISO_DIR/live/vmlinuz"
+[ -f "$INITRD" ] && cp -v "$INITRD" "$ISO_DIR/live/initrd.img"
+
+# Create squashfs filesystem
+echo "Creating filesystem.squashfs..."
+mksquashfs "$WORKDIR" "$ISO_DIR/live/filesystem.squashfs" -comp zstd -e boot
 
 # GRUB configuration
-cat > "$ISO_DIR/boot/grub/grub.cfg" <<'EOF'
+cat > "$ISO_DIR/boot/grub/grub.cfg" <<EOF
 set default=0
 set timeout=5
 menuentry "Archy Linux" {
@@ -237,11 +263,11 @@ menuentry "Archy Linux" {
 EOF
 
 # EFI boot setup
-grub-mkstandalone -O x86_64-efi -o "$ISO_DIR/EFI/BOOT/BOOTX64.EFI" boot/grub/grub.cfg="$ISO_DIR/boot/grub/grub.cfg"
+grub-mkstandalone -O x86_64-efi -o "$ISO_DIR/EFI/BOOT/BOOTX64.EFI" "boot/grub/grub.cfg=$ISO_DIR/boot/grub/grub.cfg"
 
 # BIOS boot setup
 mkdir -p "$ISO_DIR/boot/grub/i386-pc"
-cp /usr/lib/grub/i386-pc/{boot_hybrid.img,eltorito.img} "$ISO_DIR/boot/grub/i386-pc/"
+cp -v /usr/lib/grub/i386-pc/{boot.img,core.img,cdboot.img} "$ISO_DIR/boot/grub/i386-pc/"
 
 # ---- ISO CREATION ----
 echo "[5/6] Creating hybrid ISO..."
@@ -251,12 +277,12 @@ xorriso -as mkisofs \
   -r -J -joliet-long \
   -iso-level 3 \
   -partition_offset 16 \
-  --grub2-mbr /usr/lib/grub/i386-pc/boot_hybrid.img \
+  --grub2-mbr /usr/lib/grub/i386-pc/boot.img \
   --mbr-force-bootable \
   -append_partition 2 0xEF "$ISO_DIR/EFI/BOOT/BOOTX64.EFI" \
   -appended_part_as_gpt \
   -c boot.catalog \
-  -b boot/grub/i386-pc/eltorito.img \
+  -b boot/grub/i386-pc/cdboot.img \
   -no-emul-boot -boot-load-size 4 -boot-info-table \
   -eltorito-alt-boot \
   -e '--interval:appended_partition_2:all::' \
@@ -269,16 +295,17 @@ echo "[6/6] Performing safe cleanup..."
 for mountpoint in dev/pts dev proc sys run; do
     umount -lf "$WORKDIR/$mountpoint" 2>/dev/null || true
 done
-rm -rf "$WORKDIR"
 
 # ---- VERIFICATION ----
 [ -f "$ISOFILE" ] && {
     ISO_SIZE=$(du -h "$ISOFILE" | awk '{print $1}')
     echo -e "\n\033[1;32m✅ Archy Linux ISO successfully created!\033[0m"
-    echo -e "   Location: \033[1;34m$ISOFILE\033[0m"
+    echo -e "   Location: \033[1;34m$(pwd)/$ISOFILE\033[0m"
     echo -e "   Size: \033[1;34m$ISO_SIZE\033[0m"
     echo -e "\nTest with: \033[1;36mqemu-system-x86_64 -cdrom \"$ISOFILE\" -m 2G\033[0m"
 } || {
     echo -e "\n\033[1;31m❌ ISO creation failed. See errors above.\033[0m"
     exit 1
 }
+
+exit 0
