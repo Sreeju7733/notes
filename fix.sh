@@ -1,66 +1,60 @@
 #!/bin/bash
-# Complete Debian chroot builder
+# Comprehensive chroot repair script
 set -e
 
-# Configuration
-CHROOT_DIR="/archy/archy-build-amd64"
-DEBIAN_RELEASE="bullseye"  # Change to bookworm or sid if needed
-ARCH="amd64"
-MIRROR="http://deb.debian.org/debian"
+# Verify and fix chroot path
+if [ -d "/home/sreeju/archy/archy-build-amd64" ]; then
+    CHROOT_DIR="/home/sreeju/archy/archy-build-amd64"
+elif [ -d "/archy/archy-build-amd64" ]; then
+    CHROOT_DIR="/archy/archy-build-amd64"
+else
+    read -p "Enter full path to chroot directory: " CHROOT_DIR
+    mkdir -p "$CHROOT_DIR"
+fi
 
-# Create directory structure
-mkdir -p "${CHROOT_DIR}"
-cd "${CHROOT_DIR}"
-mkdir -p {bin,boot,dev,etc,home,lib,lib64,media,mnt,opt,proc,root,run,sbin,srv,sys,tmp,usr,var}
-mkdir -p usr/{bin,lib,sbin,share,include}
-mkdir -p var/{log,lib,cache,spool}
-mkdir -p dev/pts
-ln -s usr/bin bin
-ln -s usr/sbin sbin
-ln -s usr/lib lib
-ln -s usr/lib64 lib64
+# Create essential directory structure
+mkdir -p "${CHROOT_DIR}"/{bin,dev,etc,lib,lib64,proc,root,sys,tmp,usr,var}
+mkdir -p "${CHROOT_DIR}"/usr/{bin,lib,sbin}
+mkdir -p "${CHROOT_DIR}"/var/lib/apt
+mkdir -p "${CHROOT_DIR}"/dev/pts
 
-# Set up temporary filesystem mounts
-mount -t proc proc proc
-mount -t sysfs sys sys
-mount -o bind /dev dev
-mount -t devpts devpts dev/pts
+# Remove conflicting symlinks
+rm -f "${CHROOT_DIR}/bin/bin"
+rm -f "${CHROOT_DIR}/bin/sbin"
 
-# Create essential files
-cat > etc/resolv.conf <<EOF
-nameserver 8.8.8.8
-nameserver 1.1.1.1
-EOF
+# Create proper symlinks
+ln -sf usr/bin "${CHROOT_DIR}/bin"
+ln -sf usr/sbin "${CHROOT_DIR}/sbin"
+ln -sf usr/lib "${CHROOT_DIR}/lib"
+ln -sf usr/lib64 "${CHROOT_DIR}/lib64"
 
-echo "debian-chroot" > etc/hostname
+# Set up temporary resolution
+echo "nameserver 8.8.8.8" > "${CHROOT_DIR}/etc/resolv.conf"
 
-cat > etc/hosts <<EOF
-127.0.0.1 localhost
-::1 localhost ip6-localhost ip6-loopback
-ff02::1 ip6-allnodes
-ff02::2 ip6-allrouters
-EOF
-
-# Install debootstrap if missing
+# Install minimal binaries using debootstrap
 if ! command -v debootstrap >/dev/null; then
     echo "Installing debootstrap..."
     apt-get update
     apt-get install -y debootstrap
 fi
 
-# Bootstrap Debian system
-debootstrap --arch="${ARCH}" "${DEBIAN_RELEASE}" "${CHROOT_DIR}" "${MIRROR}"
+# Install minimal Debian system
+debootstrap --variant=minbase bookworm "${CHROOT_DIR}" http://deb.debian.org/debian
 
-# Configure basic system
+# Mount virtual filesystems
+mount -t proc proc "${CHROOT_DIR}/proc" || true
+mount -t sysfs sys "${CHROOT_DIR}/sys" || true
+mount -o bind /dev "${CHROOT_DIR}/dev" || true
+mount -t devpts devpts "${CHROOT_DIR}/dev/pts" || true
+
+# Final configuration inside chroot
 chroot "${CHROOT_DIR}" /bin/bash <<'EOL'
+#!/bin/bash
 set -e
-# Create required symlinks
-ln -sf /proc/self/mounts /etc/mtab
 
-# Configure locales
-echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
-locale-gen en_US.UTF-8
-update-locale LANG=en_US.UTF-8
+# Basic environment setup
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin
+export DEBIAN_FRONTEND=noninteractive
 
 # Install essential packages
 apt-get update
@@ -69,46 +63,25 @@ apt-get install -y --no-install-recommends \
     systemd-sysv \
     udev \
     dbus \
-    netbase \
-    ifupdown \
-    iproute2 \
-    isc-dhcp-client \
-    sudo \
-    apt-utils \
-    less \
-    vim-tiny
+    apt-utils
 
-# Set up root password
-echo "root:password" | chpasswd
-
-# Create default user
-useradd -m -s /bin/bash user
-echo "user:password" | chpasswd
-usermod -aG sudo user
-
-# Configure network
-cat > /etc/network/interfaces <<EOF
-auto lo
-iface lo inet loopback
-
-auto eth0
-iface eth0 inet dhcp
-EOF
-
-# Enable basic services
-systemctl enable systemd-networkd
-systemctl enable systemd-resolved
-
-# Clean package cache
+# Clean up
 apt-get clean
 rm -rf /var/lib/apt/lists/*
+
+# Verify system
+echo "System verification:"
+ls -l /bin/bash
+command -v apt-get
+update-ca-certificates --fresh
+grub-probe / || echo "grub-probe not installed (normal for minimal system)"
 EOL
 
-# Finalize
-umount dev/pts
-umount dev
-umount sys
-umount proc
+# Cleanup
+umount -l "${CHROOT_DIR}/dev/pts" 2>/dev/null || true
+umount -l "${CHROOT_DIR}/dev" 2>/dev/null || true
+umount -l "${CHROOT_DIR}/sys" 2>/dev/null || true
+umount -l "${CHROOT_DIR}/proc" 2>/dev/null || true
 
-echo "Debian chroot successfully created at ${CHROOT_DIR}"
+echo "Chroot environment successfully repaired at ${CHROOT_DIR}"
 echo "Access with: sudo chroot ${CHROOT_DIR}"
