@@ -6,7 +6,7 @@ export DISTRO_NAME="Archy"
 export DISTRO_VERSION="1.0"
 export ARCH="${ARCH:-amd64}"
 export WORKDIR="$PWD/archy-build-$ARCH"
-export ISOFILE="$PWD/${DISTRO_NAME}-${DISTRO_VERSION}-$ARCH.iso"
+export ISOFILE="$PWD/${DISTRO_NAME}-${DISTRY_VERSION}-$ARCH.iso"
 export DEBIAN_URL="http://deb.debian.org/debian"
 export BUILD_DATE=$(date +%Y-%m-%d)
 
@@ -33,7 +33,7 @@ echo "[*] Dependencies OK"
 
 # ---- CLEAN PREVIOUS BUILD ----
 echo "[1/6] Cleaning old build directory..."
-rm -rf "$WORKDIR"
+rm -rf "$WORKDIR" || true
 
 # ---- BOOTSTRAP BASE SYSTEM ----
 echo "[2/6] Bootstrapping base system..."
@@ -45,9 +45,11 @@ debootstrap \
     unstable "$WORKDIR" "$DEBIAN_URL"
 
 # ---- MOUNT SYSTEM DIRECTORIES ----
-for d in dev dev/pts proc sys; do
-    mount --bind /$d "$WORKDIR/$d"
-done
+mkdir -p "$WORKDIR"/{dev,proc,sys}
+mount --bind /dev "$WORKDIR/dev"
+mount --bind /dev/pts "$WORKDIR/dev/pts"
+mount -t proc proc "$WORKDIR/proc"
+mount -t sysfs sys "$WORKDIR/sys"
 
 # ---- CUSTOMIZE CHROOT ----
 echo "[3/6] Customizing system in chroot..."
@@ -64,10 +66,10 @@ apt-get install -y --no-install-recommends \
     apt-listbugs xorriso isolinux syslinux-common dosfstools grub-efi-amd64-bin
 
 # Remove unwanted branding and docs
-apt-get purge -y debian-* os-prober tasksel reportbug || true
-rm -rf /usr/share/{doc,man,doc-base,common-licenses,debian*}
-rm -rf /etc/{network,default,init.d,rc*.d,dpkg}
-rm -f /etc/{issue,issue.net,os-release,motd,legal}
+{ apt-get purge -y debian-* os-prober tasksel reportbug || true; } >/dev/null 2>&1
+rm -rf /usr/share/{doc,man,doc-base,common-licenses,debian*} || true
+rm -rf /etc/{network,default,init.d,rc*.d,dpkg} || true
+rm -f /etc/{issue,issue.net,os-release,motd,legal} || true
 
 # APT sources
 cat > /etc/apt/sources.list <<EOF
@@ -194,8 +196,7 @@ alias ap='apt show'
 alias auh='apt update && apt list --upgradable'
 EOF
 
-# GRUB theme (ensure /etc/default/grub exists)
-[ -f /etc/default/grub ] || touch /etc/default/grub
+# GRUB theme
 mkdir -p /boot/grub/themes/archy
 cat > /boot/grub/themes/archy/theme.txt <<EOF
 # GRUB Theme for Archy
@@ -224,23 +225,25 @@ title-color: "#00ffff"
     font = "DejaVu Sans 10"
 }
 EOF
+
+[ -f /etc/default/grub ] || touch /etc/default/grub
 echo 'GRUB_THEME="/boot/grub/themes/archy/theme.txt"' >> /etc/default/grub
 update-grub
 CHROOT
 
 # ---- UNMOUNT SYSTEM DIRECTORIES ----
-for d in dev/pts dev proc sys; do
-    umount "$WORKDIR/$d"
+echo "[4/6] Unmounting system directories..."
+for d in proc sys dev/pts dev; do
+    umount -l "$WORKDIR/$d" 2>/dev/null || true
 done
 
 # ---- ISO CREATION ----
-echo "[4/6] Creating ISO structure..."
-chroot "$WORKDIR" /bin/bash <<'CHROOT'
-set -e
-mkdir -p /iso/{boot/isolinux,live}
-cp /boot/vmlinuz-* /iso/live/vmlinuz
-cp /boot/initrd.img-* /iso/live/initrd.img
-cat > /iso/boot/isolinux/isolinux.cfg <<EOF
+echo "[5/6] Creating ISO structure..."
+mkdir -p "$WORKDIR/iso"/{boot/isolinux,live}
+cp "$WORKDIR"/boot/vmlinuz-* "$WORKDIR/iso/live/vmlinuz"
+cp "$WORKDIR"/boot/initrd.img-* "$WORKDIR/iso/live/initrd.img"
+
+cat > "$WORKDIR/iso/boot/isolinux/isolinux.cfg" <<EOF
 UI menu.c32
 PROMPT 0
 TIMEOUT 300
@@ -256,12 +259,15 @@ LABEL rescue
   INITRD /live/initrd.img
   APPEND boot=live components rescue
 EOF
-cp /usr/lib/ISOLINUX/isolinux.bin /iso/boot/isolinux/
-cp /usr/lib/syslinux/modules/bios/* /iso/boot/isolinux/
-mkdir -p /iso/boot/grub
-grub-mkstandalone -O x86_64-efi -o /iso/boot/grub/efi.img "boot/grub/grub.cfg=./grub.cfg"
+
+cp /usr/lib/ISOLINUX/isolinux.bin "$WORKDIR/iso/boot/isolinux/"
+cp /usr/lib/syslinux/modules/bios/* "$WORKDIR/iso/boot/isolinux/"
+
+mkdir -p "$WORKDIR/iso/boot/grub"
+chroot "$WORKDIR" grub-mkstandalone -O x86_64-efi -o /iso/boot/grub/efi.img "boot/grub/grub.cfg=./grub.cfg"
+
 xorriso -as mkisofs \
-  -o /Archy.iso \
+  -o "$ISOFILE" \
   -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin \
   -c boot/isolinux/boot.cat \
   -b boot/isolinux/isolinux.bin \
@@ -271,22 +277,9 @@ xorriso -as mkisofs \
   -no-emul-boot \
   -isohybrid-gpt-basdat \
   -volid "Archy" \
-  /iso
-CHROOT
+  "$WORKDIR/iso"
 
-echo "[5/6] Moving ISO..."
-mv "$WORKDIR/Archy.iso" "$ISOFILE"
 echo "[6/6] Cleaning up build..."
 rm -rf "$WORKDIR"
 echo -e "\n\033[1;32m✅ Archy ISO created: $ISOFILE\033[0m"
 echo -e "💡 Test with: \033[1;36mqemu-system-x86_64 -cdrom $ISOFILE -m 2G\033[0m\n"
-
-# ---- EXPECTED ERRORS AND SOLUTIONS ----
-: '
-EXPECTED ERRORS:
-1. If you see "Unable to locate package ..." for mkfs.fat, ensure dosfstools is installed.
-2. If you see grub-mkstandalone errors about missing modinfo.sh, ensure grub-efi-amd64-bin is installed inside chroot.
-3. If you see apt/debootstrap errors about debian-archive-keyring, do NOT exclude it from debootstrap.
-4. If you see "/etc/default/grub: No such file or directory", ensure the file exists before writing to it.
-5. If you see errors about missing directories during unmount, ignore or double-check the mount/unmount order.
-'
