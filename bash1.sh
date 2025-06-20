@@ -121,6 +121,7 @@ done
 echo "[5/6] Preparing ISO filesystem..."
 ISO_DIR="$WORKDIR-iso"
 mkdir -p "$ISO_DIR"/live
+mkdir -p "$ISO_DIR/boot/grub"
 
 VMLINUZ=$(find "$WORKDIR/boot" -name vmlinuz-* | sort -V | tail -n1)
 INITRD=$(find "$WORKDIR/boot" -name initrd.img-* | sort -V | tail -n1)
