@@ -1,60 +1,77 @@
 #!/bin/bash
-# Universal chroot fix script
+# Complete chroot environment fix
 set -e
 
 # Define chroot path
 CHROOT_DIR="/archy/archy-build-amd64"
 
-# Create required directories
-mkdir -p "${CHROOT_DIR}"/{proc,sys,dev,dev/pts,bin,usr/bin,lib,lib64,usr/lib}
+# Create essential directory structure
+mkdir -p "${CHROOT_DIR}"/{bin,dev,etc,lib,lib64,proc,root,sys,tmp,usr,var}
+mkdir -p "${CHROOT_DIR}"/usr/{bin,lib,sbin}
+mkdir -p "${CHROOT_DIR}"/var/lib/apt
+mkdir -p "${CHROOT_DIR}"/dev/pts
 
-# Copy essential binaries and libraries
-for bin in sh bash; do
-    [ -f "/bin/$bin" ] && cp -f "/bin/$bin" "${CHROOT_DIR}/bin/"
-done
+# Set up temporary resolution (use Google DNS)
+echo "nameserver 8.8.8.8" > "${CHROOT_DIR}/etc/resolv.conf"
 
-# Copy basic utilities
-[ -f "/usr/bin/apt-get" ] && cp -f "/usr/bin/apt-get" "${CHROOT_DIR}/usr/bin/"
-[ -f "/usr/bin/update-ca-certificates" ] && cp -f "/usr/bin/update-ca-certificates" "${CHROOT_DIR}/usr/bin/"
-[ -f "/usr/sbin/grub-probe" ] && cp -f "/usr/sbin/grub-probe" "${CHROOT_DIR}/usr/sbin/"
+# Copy core binaries
+cp /bin/{bash,sh,ls,cat,echo,mkdir,rm,mount,umount,chroot} "${CHROOT_DIR}/bin/"
+cp /usr/bin/apt-get "${CHROOT_DIR}/usr/bin/"
+cp /usr/sbin/{grub-probe,update-ca-certificates} "${CHROOT_DIR}/usr/sbin/"
 
 # Copy essential libraries
-ldd "/bin/sh" | awk '/=>/ {print $3}' | while read -r lib; do
-    [ -f "$lib" ] && cp -f "$lib" "${CHROOT_DIR}${lib}"
-done
+copy_libs() {
+    for bin in "$@"; do
+        ldd "$bin" | awk '/=>/ {print $3}' | while read -r lib; do
+            [ -f "$lib" ] && {
+                lib_dir="${CHROOT_DIR}/$(dirname "$lib")"
+                mkdir -p "$lib_dir"
+                cp -f "$lib" "${CHROOT_DIR}${lib}"
+            }
+        done
+    done
+}
+
+# Copy libraries for core binaries
+copy_libs /bin/bash /bin/sh /usr/bin/apt-get /usr/sbin/grub-probe
 
 # Mount virtual filesystems
-mount -t proc proc "${CHROOT_DIR}/proc" 2>/dev/null || true
-mount -t sysfs sys "${CHROOT_DIR}/sys" 2>/dev/null || true
-mount -o bind /dev "${CHROOT_DIR}/dev" 2>/dev/null || true
-mount -t devpts devpts "${CHROOT_DIR}/dev/pts" 2>/dev/null || true
+mount -t proc proc "${CHROOT_DIR}/proc"
+mount -t sysfs sys "${CHROOT_DIR}/sys"
+mount -o bind /dev "${CHROOT_DIR}/dev"
+mount -t devpts devpts "${CHROOT_DIR}/dev/pts"
 
-# Run commands with fallback to sh
-chroot "${CHROOT_DIR}" /bin/sh -c '
+# Run commands in the chroot
+chroot "${CHROOT_DIR}" /bin/bash -c '
     # Basic environment setup
     export PATH=/usr/bin:/bin:/usr/sbin:/sbin
+    export HOME=/root
+    export TERM=xterm
     export DEBIAN_FRONTEND=noninteractive
     
-    # Reinstall keyring
+    # Create required symlinks
+    ln -s /usr/sbin/update-ca-certificates /usr/bin/ 2>/dev/null
+    
+    # Reinstall critical packages
     echo "Reinstalling essential packages..."
-    [ -x /usr/bin/apt-get ] && apt-get update
-    [ -x /usr/bin/apt-get ] && apt-get install --reinstall -y debian-archive-keyring ca-certificates
+    apt-get update
+    apt-get install --reinstall -y debian-archive-keyring ca-certificates
     
     # Update certificates
     echo "Updating CA certificates..."
-    [ -x /usr/bin/update-ca-certificates ] && update-ca-certificates --fresh
+    update-ca-certificates --fresh
     
-    # Test system
+    # Test system functionality
     echo "Testing system..."
-    [ -x /usr/sbin/grub-probe ] && grub-probe / || echo "Grub probe test skipped"
+    grub-probe / && echo "Grub probe successful" || echo "Grub probe test skipped"
     
     echo "Critical operations completed successfully"
 '
 
 # Cleanup
-umount -l "${CHROOT_DIR}/dev/pts" 2>/dev/null || true
-umount -l "${CHROOT_DIR}/dev" 2>/dev/null || true
-umount -l "${CHROOT_DIR}/sys" 2>/dev/null || true
-umount -l "${CHROOT_DIR}/proc" 2>/dev/null || true
+umount -l "${CHROOT_DIR}/dev/pts"
+umount -l "${CHROOT_DIR}/dev"
+umount -l "${CHROOT_DIR}/sys"
+umount -l "${CHROOT_DIR}/proc"
 
-echo "Fix operations completed. System should be functional now."
+echo "Fix completed. Chroot environment should be functional."
