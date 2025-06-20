@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# === Config ===
+# ---- CONFIG ----
 export DISTRO_NAME="Archy"
 export DISTRO_VERSION="1.0"
 export ARCH="${ARCH:-amd64}"
@@ -10,69 +10,72 @@ export ISOFILE="$PWD/${DISTRO_NAME}-${DISTRO_VERSION}-$ARCH.iso"
 export DEBIAN_URL="http://deb.debian.org/debian"
 export BUILD_DATE=$(date +%Y-%m-%d)
 
-# === Dependency Install (host) ===
-function check_install() {
+# ---- DEPENDENCY CHECK ----
+echo "[*] Checking dependencies..."
+function ensure_pkg() {
     local pkg="$1" bin="$2"
     if ! command -v "$bin" &>/dev/null; then
         echo "Installing dependency: $pkg"
-        apt update
-        apt install -y "$pkg"
+        apt-get update
+        apt-get install -y "$pkg"
     fi
 }
-check_install debootstrap debootstrap
-check_install xorriso xorriso
-check_install parted parted
-check_install dosfstools mkfs.fat
-check_install grub2 grub-mkrescue
-check_install isolinux isolinux
-check_install syslinux-common isohdpfx.bin
-check_install grub-efi-amd64-bin grub-mkstandalone
+ensure_pkg debootstrap debootstrap
+ensure_pkg xorriso xorriso
+ensure_pkg parted parted
+ensure_pkg dosfstools mkfs.fat
+ensure_pkg grub2 grub-mkrescue
+ensure_pkg isolinux isolinux
+ensure_pkg syslinux-common isohdpfx.bin
+ensure_pkg grub-efi-amd64-bin grub-mkstandalone
 
-# === Clean old build ===
-echo "[1/6] 🧹 Cleaning old build..."
+echo "[*] Dependencies OK"
+
+# ---- CLEAN PREVIOUS BUILD ----
+echo "[1/6] Cleaning old build directory..."
 rm -rf "$WORKDIR"
 
-# === Create minimal base ===
-echo "[2/6] 🏗️  Creating minimal base system..."
+# ---- BOOTSTRAP BASE SYSTEM ----
+echo "[2/6] Bootstrapping base system..."
 debootstrap \
     --arch="$ARCH" \
     --variant=minbase \
-    --exclude=debian-archive-keyring,debian-faq,debian-reference,debian-installer \
+    --exclude=debian-faq,debian-reference,debian-installer \
     --include=apt,dpkg,linux-image-$ARCH,systemd \
     unstable "$WORKDIR" "$DEBIAN_URL"
 
-# === Mount system dirs for chroot ===
-mount --bind /dev "$WORKDIR/dev"
-mount --bind /dev/pts "$WORKDIR/dev/pts"
-mount --bind /proc "$WORKDIR/proc"
-mount --bind /sys "$WORKDIR/sys"
+# ---- MOUNT SYSTEM DIRECTORIES ----
+for d in dev dev/pts proc sys; do
+    mount --bind /$d "$WORKDIR/$d"
+done
 
-# === Chroot system customization ===
-echo "[3/6] 🎨 Customizing Archy system..."
-chroot "$WORKDIR" /bin/bash <<'EOF'
+# ---- CUSTOMIZE CHROOT ----
+echo "[3/6] Customizing system in chroot..."
+chroot "$WORKDIR" /bin/bash <<'CHROOT'
 set -e
 
 export DEBIAN_FRONTEND=noninteractive
 
-apt update
-apt install -y --no-install-recommends \
+# Install required packages
+apt-get update
+apt-get install -y --no-install-recommends \
     bash coreutils systemd udev sudo nano less grub2 \
     network-manager wget curl fdisk parted locales \
     apt-listbugs xorriso isolinux syslinux-common dosfstools grub-efi-amd64-bin
 
-# Remove Debian branding and docs
-apt purge -y debian-* os-prober tasksel reportbug || true
+# Remove unwanted branding and docs
+apt-get purge -y debian-* os-prober tasksel reportbug || true
 rm -rf /usr/share/{doc,man,doc-base,common-licenses,debian*}
-rm -rf /etc/{network,default,init.d,rc*.d,dpkg,apt/apt.conf.d}
+rm -rf /etc/{network,default,init.d,rc*.d,dpkg}
 rm -f /etc/{issue,issue.net,os-release,motd,legal}
 
-# Custom APT config
-cat > /etc/apt/sources.list <<SOURCES
+# APT sources
+cat > /etc/apt/sources.list <<EOF
 deb http://deb.debian.org/debian unstable main contrib non-free
-SOURCES
+EOF
 
-# Custom OS identity
-cat > /etc/os-release <<OS_RELEASE
+# OS identity
+cat > /etc/os-release <<EOF
 NAME="Archy"
 PRETTY_NAME="Archy 1.0"
 VERSION="1.0 ($BUILD_DATE)"
@@ -81,22 +84,21 @@ ID_LIKE=debian
 HOME_URL="https://archy.org"
 SUPPORT_URL="https://archy.org/support"
 BUG_REPORT_URL="https://archy.org/bugs"
-OS_RELEASE
+EOF
 
-# Custom login messages
-cat > /etc/issue <<ISSUE
+# Login messages
+cat > /etc/issue <<EOF
 Archy 1.0 \\n \\l
-ISSUE
+EOF
 cp /etc/issue /etc/issue.net
 
-cat > /etc/motd <<MOTD
+cat > /etc/motd <<EOF
 Welcome to Archy - The Minimalist's Dream
 Type 'archy-help' for basic commands
+EOF
 
-MOTD
-
-# === Custom Commands ===
-cat > /usr/bin/archy-help <<'HELP'
+# Custom commands
+cat > /usr/bin/archy-help <<'EOF'
 #!/bin/bash
 echo -e "\033[1;36mArchy Help System\033[0m"
 echo "archy-install   - Install Archy to disk"
@@ -107,39 +109,23 @@ echo "au              - Alias for archy-upgrade"
 echo "ai <pkg>        - Install package"
 echo "ar <pkg>        - Remove package"
 echo "as <term>       - Search packages"
-HELP
+EOF
 chmod +x /usr/bin/archy-help
 
-# Installer
-cat > /usr/bin/archy-install <<'INSTALL'
+# Installer script
+cat > /usr/bin/archy-install <<'EOF'
 #!/bin/bash
 set -e
-RED='\033[0;31m'; GREEN='\033[0;32m'; BLUE='\033[0;34m'; NC='\033[0m'
-echo -e "\033[1;36m"
-cat <<'HEADER'
-     _          _       
-    /_\  _ _ __| |_ ___ 
-   / _ \| '_/ _|  _/ -_)
-  /_/ \_\_| \__|\__\___| 
-      [ Minimalist Debian ]
-HEADER
-echo -e "\033[0m"
-if [[ $EUID -ne 0 ]]; then
-   echo -e "${RED}Error: This script must be run as root${NC}" 
-   exit 1
-fi
-echo -e "${BLUE}Available disks:${NC}"
+echo -e "\033[1;36mArchy Installer\033[0m"
+if [[ $EUID -ne 0 ]]; then echo "Run as root"; exit 1; fi
 lsblk -d -o NAME,SIZE,MODEL
-echo ""
 read -p "Enter target disk (e.g. sda): " DISK
 DISK="/dev/$DISK"
-echo -e "${BLUE}Partitioning options:${NC}"
-echo "1) Auto-partition (GPT, 512MB EFI, rest as root)"
+echo "1) Auto (GPT, 512MB EFI, rest as root)"
 echo "2) Manual (cfdisk)"
-read -p "Select option [1/2]: " PART_OPTION
-case $PART_OPTION in
+read -p "Option [1/2]: " OPT
+case $OPT in
     1)
-        echo -e "${GREEN}Auto-partitioning $DISK...${NC}"
         parted -s "$DISK" mklabel gpt
         parted -s "$DISK" mkpart primary 1MiB 513MiB
         parted -s "$DISK" set 1 esp on
@@ -150,26 +136,14 @@ case $PART_OPTION in
         mkdir -p /mnt/boot/efi
         mount "${DISK}1" /mnt/boot/efi
         ;;
-    2)
-        cfdisk "$DISK"
-        echo -e "${YELLOW}Please mount partitions manually and re-run${NC}"
-        exit
-        ;;
-    *)
-        echo -e "${RED}Invalid option${NC}"
-        exit 1
-        ;;
+    2) cfdisk "$DISK"; echo "Mount partitions manually and re-run"; exit;;
+    *) echo "Invalid option"; exit 1;;
 esac
-echo -e "${BLUE}Installing base system...${NC}"
 debootstrap unstable /mnt http://deb.debian.org/debian
-arch-chroot /mnt /bin/bash <<CHROOT
-echo "Archy" > /etc/hostname
-ln -sf /usr/share/zoneinfo/UTC /etc/localtime
-apt update
-apt install -y --no-install-recommends \
-    linux-image-$ARCH grub-efi-$ARCH sudo bash nano less \
-    network-manager systemd udev apt-listbugs locales
-grub-install --target=${ARCH}-efi --efi-directory=/boot/efi --bootloader-id=Archy
+arch-chroot /mnt /bin/bash <<'CHROOT2'
+apt-get update
+apt-get install -y linux-image-amd64 grub-efi-amd64 sudo bash nano less network-manager systemd udev locales
+grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=Archy
 update-grub
 useradd -m -G sudo -s /bin/bash user
 echo "user:archy" | chpasswd
@@ -178,70 +152,52 @@ systemctl enable NetworkManager
 echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
 locale-gen
 update-locale LANG=en_US.UTF-8
-cp /usr/bin/archy-* /usr/bin/
-cp /etc/{os-release,issue,issue.net,motd} /etc/
-CHROOT
-echo -e "${GREEN}Installation complete!${NC}"
-echo -e "Unmount and reboot with:"
-echo -e "umount -R /mnt"
-echo -e "reboot"
-INSTALL
+CHROOT2
+echo "Done. Unmount and reboot."
+EOF
 chmod +x /usr/bin/archy-install
 
-cat > /usr/bin/archy-init <<'INIT'
+# archy-init
+cat > /usr/bin/archy-init <<'EOF'
 #!/bin/bash
 set -e
 echo -e "\033[1;36mArchy Initialization\033[0m"
-echo "[*] Setting up system..."
 timedatectl set-ntp true
-apt update
-apt full-upgrade -y
-echo "[*] Configuring locales..."
+apt-get update
+apt-get full-upgrade -y
 dpkg-reconfigure locales
-echo "[*] Setting hostname..."
 read -p "Enter hostname: " HOSTNAME
 echo "$HOSTNAME" > /etc/hostname
 echo -e "\033[1;32mInitialization complete!\033[0m"
-echo "Run 'archy-upgrade' to update your system"
-INIT
+EOF
 chmod +x /usr/bin/archy-init
 
-cat > /usr/bin/archy-upgrade <<'UPGRADE'
+# archy-upgrade
+cat > /usr/bin/archy-upgrade <<'EOF'
 #!/bin/bash
 set -e
 echo -e "\033[1;34mArchy Upgrade System\033[0m"
-echo "[*] Updating package lists..."
-apt update
-echo "[*] Checking for upgrades..."
-apt list --upgradable
-read -p "Do you want to proceed with upgrade? [y/N] " choice
-case "$choice" in 
-  y|Y )
-    echo "[*] Upgrading system..."
-    apt full-upgrade -y
-    echo "[*] Cleaning up..."
-    apt autoremove -y
-    echo -e "\033[1;32mUpgrade complete!\033[0m"
-    ;;
-  * )
-    echo "Upgrade cancelled."
-    ;;
-esac
-UPGRADE
+apt-get update
+apt-get full-upgrade -y
+apt-get autoremove -y
+echo -e "\033[1;32mUpgrade complete!\033[0m"
+EOF
 chmod +x /usr/bin/archy-upgrade
 
-cat >> /etc/skel/.bashrc <<BASHRC
-# Archy Aliases
+# Aliases for users
+cat >> /etc/skel/.bashrc <<EOF
 alias au='sudo archy-upgrade'
 alias ai='sudo apt install'
 alias ar='sudo apt remove'
 alias as='apt search'
 alias ap='apt show'
 alias auh='apt update && apt list --upgradable'
-BASHRC
+EOF
 
+# GRUB theme (ensure /etc/default/grub exists)
+[ -f /etc/default/grub ] || touch /etc/default/grub
 mkdir -p /boot/grub/themes/archy
-cat > /boot/grub/themes/archy/theme.txt <<THEME
+cat > /boot/grub/themes/archy/theme.txt <<EOF
 # GRUB Theme for Archy
 title-text: "Archy"
 title-font: "DejaVu Sans Bold 16"
@@ -267,26 +223,24 @@ title-color: "#00ffff"
     text = "Version 1.0 - $BUILD_DATE"
     font = "DejaVu Sans 10"
 }
-THEME
-
+EOF
 echo 'GRUB_THEME="/boot/grub/themes/archy/theme.txt"' >> /etc/default/grub
 update-grub
-EOF
+CHROOT
 
-# === Unmount system dirs ===
-umount "$WORKDIR/dev/pts"
-umount "$WORKDIR/dev"
-umount "$WORKDIR/proc"
-umount "$WORKDIR/sys"
+# ---- UNMOUNT SYSTEM DIRECTORIES ----
+for d in dev/pts dev proc sys; do
+    umount "$WORKDIR/$d"
+done
 
-# === ISO Creation ===
-echo "[4/6] 📀 Creating ISO structure..."
-chroot "$WORKDIR" /bin/bash <<'EOF'
+# ---- ISO CREATION ----
+echo "[4/6] Creating ISO structure..."
+chroot "$WORKDIR" /bin/bash <<'CHROOT'
 set -e
 mkdir -p /iso/{boot/isolinux,live}
 cp /boot/vmlinuz-* /iso/live/vmlinuz
 cp /boot/initrd.img-* /iso/live/initrd.img
-cat > /iso/boot/isolinux/isolinux.cfg <<EOL
+cat > /iso/boot/isolinux/isolinux.cfg <<EOF
 UI menu.c32
 PROMPT 0
 TIMEOUT 300
@@ -301,7 +255,7 @@ LABEL rescue
   LINUX /live/vmlinuz
   INITRD /live/initrd.img
   APPEND boot=live components rescue
-EOL
+EOF
 cp /usr/lib/ISOLINUX/isolinux.bin /iso/boot/isolinux/
 cp /usr/lib/syslinux/modules/bios/* /iso/boot/isolinux/
 mkdir -p /iso/boot/grub
@@ -318,13 +272,21 @@ xorriso -as mkisofs \
   -isohybrid-gpt-basdat \
   -volid "Archy" \
   /iso
-EOF
+CHROOT
 
-echo "[5/6] 🔄 Moving ISO..."
+echo "[5/6] Moving ISO..."
 mv "$WORKDIR/Archy.iso" "$ISOFILE"
-
-echo "[6/6] 🧹 Cleaning up..."
+echo "[6/6] Cleaning up build..."
 rm -rf "$WORKDIR"
-
-echo -e "\n\033[1;32m✅ Archy ISO successfully created: $ISOFILE\033[0m"
+echo -e "\n\033[1;32m✅ Archy ISO created: $ISOFILE\033[0m"
 echo -e "💡 Test with: \033[1;36mqemu-system-x86_64 -cdrom $ISOFILE -m 2G\033[0m\n"
+
+# ---- EXPECTED ERRORS AND SOLUTIONS ----
+: '
+EXPECTED ERRORS:
+1. If you see "Unable to locate package ..." for mkfs.fat, ensure dosfstools is installed.
+2. If you see grub-mkstandalone errors about missing modinfo.sh, ensure grub-efi-amd64-bin is installed inside chroot.
+3. If you see apt/debootstrap errors about debian-archive-keyring, do NOT exclude it from debootstrap.
+4. If you see "/etc/default/grub: No such file or directory", ensure the file exists before writing to it.
+5. If you see errors about missing directories during unmount, ignore or double-check the mount/unmount order.
+'
