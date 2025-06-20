@@ -143,6 +143,11 @@ mkdir -p "$ISO_DIR/EFI/BOOT"
 grub-mkstandalone -O x86_64-efi -o "$ISO_DIR/EFI/BOOT/BOOTX64.EFI" \
     "boot/grub/grub.cfg=$ISO_DIR/boot/grub/grub.cfg"
 
+# Generate BIOS eltorito.img
+mkdir -p "$ISO_DIR/boot/grub/i386-pc"
+grub-mkimage -O i386-pc -o "$ISO_DIR/boot/grub/i386-pc/eltorito.img" \
+    -p /boot/grub biosdisk iso9660 multiboot normal configfile linux
+
 # ---- ISO CREATION ----
 echo "[6/6] Creating hybrid ISO..."
 xorriso -as mkisofs \
