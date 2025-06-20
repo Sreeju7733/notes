@@ -1,9 +1,9 @@
 #!/bin/bash
-# Comprehensive chroot repair script with PATH fix
+# Comprehensive chroot repair script with full debootstrap path
 set -e
 
-# Set PATH to include sbin directories
-export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Set PATH to include system binaries
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 # Verify and fix chroot path
 if [ -d "/home/sreeju/archy/archy-build-amd64" ]; then
@@ -35,14 +35,15 @@ ln -sf usr/lib64 "${CHROOT_DIR}/lib64"
 echo "nameserver 8.8.8.8" > "${CHROOT_DIR}/etc/resolv.conf"
 
 # Install minimal binaries using debootstrap
-if ! command -v debootstrap >/dev/null; then
+if ! command -v debootstrap >/dev/null && ! command -v /usr/sbin/debootstrap >/dev/null; then
     echo "Installing debootstrap..."
     apt-get update
     apt-get install -y debootstrap
 fi
 
-# Install minimal Debian system
-debootstrap --variant=minbase bookworm "${CHROOT_DIR}" http://deb.debian.org/debian
+# Use full path for debootstrap
+echo "Running debootstrap..."
+/usr/sbin/debootstrap --variant=minbase bookworm "${CHROOT_DIR}" http://deb.debian.org/debian
 
 # Mount virtual filesystems
 mount -t proc proc "${CHROOT_DIR}/proc" 2>/dev/null || true
@@ -78,6 +79,7 @@ ls -l /bin/bash
 command -v apt-get
 update-ca-certificates --fresh
 command -v grub-probe || echo "grub-probe not installed (normal for minimal system)"
+echo "Chroot environment is functional!"
 EOL
 
 # Cleanup
