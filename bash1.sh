@@ -267,23 +267,30 @@ menuentry "Archy Linux (Install)" {
 }
 EOF
 
-# ---- BUILD ISO ----
-echo "[*] Generating ISO image (this may take several minutes)..."
-if grub-mkrescue -o "$ISOFILE" "$ISO_DIR" --volid="ARCHY_LIVE"; then
-    echo "✅ ISO creation successful!"
-else
-    echo "❌ ISO creation failed. Trying alternative method..."
-    xorriso -as mkisofs \
-        -r -V "ARCHY_LIVE" \
-        -o "$ISOFILE" \
-        -b boot/grub/efi.img \
-        -no-emul-boot \
-        -boot-load-size 4 \
-        -boot-info-table \
-        --efi-boot boot/grub/efi.img \
-        --protective-msdos-label \
-        "$ISO_DIR"
-fi
+# Create EFI boot image
+echo "[+] Creating EFI boot image..."
+mkdir -p "$ISO_DIR/EFI/BOOT"
+grub-mkstandalone -O x86_64-efi -o "$ISO_DIR/EFI/BOOT/BOOTX64.EFI" "boot/grub/grub.cfg=$ISO_DIR/boot/grub/grub.cfg"
+
+# Create bootable ISO using reliable method
+echo "[*] Generating ISO image..."
+xorriso -as mkisofs \
+  -r -V "ARCHY_LIVE" \
+  -o "$ISOFILE" \
+  -J -joliet-long \
+  -iso-level 3 \
+  -partition_offset 16 \
+  --grub2-mbr /usr/share/grub/grub-mkconfig_lib \
+  --mbr-force-bootable \
+  -append_partition 2 0xEF "$ISO_DIR/EFI/BOOT/BOOTX64.EFI" \
+  -appended_part_as_gpt \
+  -c boot.catalog \
+  -b boot/grub/i386-pc/eltorito.img \
+  -no-emul-boot -boot-load-size 4 -boot-info-table \
+  -eltorito-alt-boot \
+  -e '--interval:appended_partition_2:all::' \
+  -no-emul-boot \
+  "$ISO_DIR"
 
 # ---- FINAL CLEANUP ----
 echo "[*] Cleaning up build environment..."
