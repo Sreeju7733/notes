@@ -6,7 +6,7 @@ export DISTRO_NAME="Archy"
 export DISTRO_VERSION="1.0"
 export ARCH="${ARCH:-amd64}"
 export WORKDIR="$PWD/archy-build-$ARCH"
-export ISOFILE="$PWD/${DISTRO_NAME}-${DISTRY_VERSION}-$ARCH.iso"
+export ISOFILE="$PWD/${DISTRO_NAME}-${DISTRO_VERSION}-$ARCH.iso"  # Fixed this line
 export DEBIAN_URL="http://deb.debian.org/debian"
 export BUILD_DATE=$(date +%Y-%m-%d)
 
