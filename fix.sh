@@ -1,6 +1,9 @@
 #!/bin/bash
-# Comprehensive chroot repair script
+# Comprehensive chroot repair script with PATH fix
 set -e
+
+# Set PATH to include sbin directories
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # Verify and fix chroot path
 if [ -d "/home/sreeju/archy/archy-build-amd64" ]; then
@@ -19,8 +22,8 @@ mkdir -p "${CHROOT_DIR}"/var/lib/apt
 mkdir -p "${CHROOT_DIR}"/dev/pts
 
 # Remove conflicting symlinks
-rm -f "${CHROOT_DIR}/bin/bin"
-rm -f "${CHROOT_DIR}/bin/sbin"
+rm -f "${CHROOT_DIR}/bin/bin" 2>/dev/null || true
+rm -f "${CHROOT_DIR}/sbin/sbin" 2>/dev/null || true
 
 # Create proper symlinks
 ln -sf usr/bin "${CHROOT_DIR}/bin"
@@ -42,10 +45,10 @@ fi
 debootstrap --variant=minbase bookworm "${CHROOT_DIR}" http://deb.debian.org/debian
 
 # Mount virtual filesystems
-mount -t proc proc "${CHROOT_DIR}/proc" || true
-mount -t sysfs sys "${CHROOT_DIR}/sys" || true
-mount -o bind /dev "${CHROOT_DIR}/dev" || true
-mount -t devpts devpts "${CHROOT_DIR}/dev/pts" || true
+mount -t proc proc "${CHROOT_DIR}/proc" 2>/dev/null || true
+mount -t sysfs sys "${CHROOT_DIR}/sys" 2>/dev/null || true
+mount -o bind /dev "${CHROOT_DIR}/dev" 2>/dev/null || true
+mount -t devpts devpts "${CHROOT_DIR}/dev/pts" 2>/dev/null || true
 
 # Final configuration inside chroot
 chroot "${CHROOT_DIR}" /bin/bash <<'EOL'
@@ -74,7 +77,7 @@ echo "System verification:"
 ls -l /bin/bash
 command -v apt-get
 update-ca-certificates --fresh
-grub-probe / || echo "grub-probe not installed (normal for minimal system)"
+command -v grub-probe || echo "grub-probe not installed (normal for minimal system)"
 EOL
 
 # Cleanup
