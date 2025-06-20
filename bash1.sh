@@ -5,13 +5,12 @@ set -euo pipefail
 DISTRO_NAME="Archy"
 DISTRO_VERSION="1.0"
 ARCH="${ARCH:-amd64}"
-WORKDIR="/archy-build"  # Using absolute path
+WORKDIR="/archy-build"
 ISOFILE="/${DISTRO_NAME}-${DISTRO_VERSION}-${ARCH}.iso"
 DEBIAN_URL="http://deb.debian.org/debian"
 BUILD_DATE=$(date +%Y-%m-%d)
 
 # ---- TERMINAL AND LOCALE SETUP ----
-# Fix terminal and locale issues from the start
 export LANG=C.UTF-8
 export LC_ALL=C.UTF-8
 mkdir -p /dev/pts
@@ -24,14 +23,14 @@ apt-get install -y debootstrap xorriso parted dosfstools \
     grub2-common grub-efi-amd64-bin isolinux syslinux-common \
     squashfs-tools live-boot zstd locales
 
-# Configure locales properly
+# Configure locales
 echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
 locale-gen en_US.UTF-8
 update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 
 # ---- CLEAN PREVIOUS BUILD ----
 echo "[1/6] Cleaning workspace..."
-umount -R $WORKDIR 2>/dev/null || true
+umount -R "$WORKDIR" 2>/dev/null || true
 rm -rf "$WORKDIR" "$ISOFILE" 2>/dev/null || true
 mkdir -p "$WORKDIR"
 
@@ -40,7 +39,7 @@ echo "[2/6] Bootstrapping Debian unstable..."
 debootstrap \
     --arch="$ARCH" \
     --variant=minbase \
-    --include=systemd,linux-image-$ARCH,grub-efi-amd64,zstd,locales \
+    --include=systemd,linux-image-$ARCH,grub-efi-amd64,zstd,locales,initramfs-tools \
     unstable "$WORKDIR" "$DEBIAN_URL"
 
 # ---- MOUNT SYSTEM DIRECTORIES ----
@@ -49,13 +48,14 @@ mount --bind /dev "$WORKDIR/dev"
 mount -t proc proc "$WORKDIR/proc"
 mount -t sysfs sys "$WORKDIR/sys"
 mount -t devpts devpts "$WORKDIR/dev/pts"
+mount -t tmpfs tmpfs "$WORKDIR/run"
 
 # ---- SYSTEM CONFIGURATION ----
 echo "[3/6] Configuring system..."
 chroot "$WORKDIR" /bin/bash <<'EOT'
 set -e
 
-# Set locale environment immediately
+# Set locale environment
 export LANG=en_US.UTF-8
 export LC_ALL=en_US.UTF-8
 
@@ -66,10 +66,10 @@ echo "127.0.1.1 archy" >> /etc/hosts
 # Install essential packages
 apt-get update
 apt-get install -y --no-install-recommends \
-    systemd-sysv initramfs-tools network-manager sudo \
+    systemd-sysv network-manager sudo \
     bash nano less grub-common live-boot zstd locales
 
-# Configure locales properly
+# Configure locales
 echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
 locale-gen en_US.UTF-8
 update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
@@ -194,12 +194,25 @@ EOT
 echo "[4/6] Configuring initramfs..."
 chroot "$WORKDIR" /bin/bash <<'EOT'
 # Set compression to zstd
-echo "COMPRESS=zstd" >> /etc/initramfs-tools/initramfs.conf
-echo 'MODULES=dep' >> /etc/initramfs-tools/initramfs.conf
-echo 'BUSYBOX=y' >> /etc/initramfs-tools/initramfs.conf
+echo "COMPRESS=zstd" > /etc/initramfs-tools/conf.d/compression.conf
 
-# Update initramfs
-update-initramfs -u
+# Use MODULES=most to prevent device detection failures
+echo "MODULES=most" > /etc/initramfs-tools/conf.d/modules.conf
+
+# Disable device mapper verification
+echo "DEVICE_MAPPER=no" > /etc/initramfs-tools/conf.d/dm.conf
+
+# Create a fake root device to satisfy initramfs tools
+mkdir -p /root-tmp
+mount -t tmpfs tmpfs /root-tmp
+touch /root-tmp/root_device
+
+# Update initramfs with workaround
+update-initramfs -u -k all
+
+# Cleanup fake root
+umount /root-tmp
+rm -rf /root-tmp
 EOT
 
 # ---- PREPARE LIVE SYSTEM ----
