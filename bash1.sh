@@ -218,8 +218,10 @@ EOT
 # ---- PREPARE LIVE SYSTEM ----
 echo "[5/6] Preparing live environment..."
 chroot "$WORKDIR" /bin/bash <<'EOT'
+# Create necessary directories for live-boot
+mkdir -p /lib/live/config
+
 # Create live-boot configuration
-mkdir -p /lib/live/mount
 cat > /lib/live/config/0030-archy <<'EOF'
 #!/bin/sh
 
