@@ -5,28 +5,33 @@ set -euo pipefail
 DISTRO_NAME="Archy"
 DISTRO_VERSION="1.0"
 ARCH="${ARCH:-amd64}"
-WORKDIR="/archy-build"  # Using absolute path to avoid permission issues
+WORKDIR="/archy-build"  # Using absolute path
 ISOFILE="/${DISTRO_NAME}-${DISTRO_VERSION}-${ARCH}.iso"
 DEBIAN_URL="http://deb.debian.org/debian"
 BUILD_DATE=$(date +%Y-%m-%d)
 
-# ---- TERMINAL SETUP ----
-# Ensure terminal devices exist for sudo operations
+# ---- TERMINAL AND LOCALE SETUP ----
+# Fix terminal and locale issues from the start
+export LANG=C.UTF-8
+export LC_ALL=C.UTF-8
 mkdir -p /dev/pts
 mount -t devpts devpts /dev/pts 2>/dev/null || true
 
 # ---- DEPENDENCY INSTALLATION ----
 echo "[*] Installing required packages..."
-{
-    apt-get update
-    apt-get install -y debootstrap xorriso parted dosfstools \
-        grub2-common grub-efi-amd64-bin isolinux syslinux-common \
-        squashfs-tools live-boot
-} >/dev/null 2>&1
+apt-get update
+apt-get install -y debootstrap xorriso parted dosfstools \
+    grub2-common grub-efi-amd64-bin isolinux syslinux-common \
+    squashfs-tools live-boot zstd locales
+
+# Configure locales properly
+echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
+locale-gen en_US.UTF-8
+update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 
 # ---- CLEAN PREVIOUS BUILD ----
 echo "[1/6] Cleaning workspace..."
-umount -l $WORKDIR/dev/* 2>/dev/null || true
+umount -R $WORKDIR 2>/dev/null || true
 rm -rf "$WORKDIR" "$ISOFILE" 2>/dev/null || true
 mkdir -p "$WORKDIR"
 
@@ -35,8 +40,8 @@ echo "[2/6] Bootstrapping Debian unstable..."
 debootstrap \
     --arch="$ARCH" \
     --variant=minbase \
-    --include=systemd,linux-image-$ARCH,grub-efi-amd64 \
-    unstable "$WORKDIR" "$DEBIAN_URL" 2>/dev/null
+    --include=systemd,linux-image-$ARCH,grub-efi-amd64,zstd,locales \
+    unstable "$WORKDIR" "$DEBIAN_URL"
 
 # ---- MOUNT SYSTEM DIRECTORIES ----
 echo "[*] Mounting system directories..."
@@ -50,6 +55,10 @@ echo "[3/6] Configuring system..."
 chroot "$WORKDIR" /bin/bash <<'EOT'
 set -e
 
+# Set locale environment immediately
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
+
 # Basic system setup
 echo "archy" > /etc/hostname
 echo "127.0.1.1 archy" >> /etc/hosts
@@ -58,17 +67,17 @@ echo "127.0.1.1 archy" >> /etc/hosts
 apt-get update
 apt-get install -y --no-install-recommends \
     systemd-sysv initramfs-tools network-manager sudo \
-    locales bash nano less grub-common live-boot
+    bash nano less grub-common live-boot zstd locales
+
+# Configure locales properly
+echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
+locale-gen en_US.UTF-8
+update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 
 # Create user
 useradd -m -s /bin/bash user
 echo "user:archy" | chpasswd
 echo "root:archy" | chpasswd
-
-# Configure locales
-echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
-locale-gen
-update-locale LANG=en_US.UTF-8
 
 # OS identity
 cat > /etc/os-release <<EOF
@@ -164,11 +173,37 @@ GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"
 GRUB_CMDLINE_LINUX=""
 EOF
 
+# Force device detection for GRUB
+cat > /usr/bin/fake-grub-probe <<'EOF'
+#!/bin/bash
+echo "(hd0,msdos1)"
+EOF
+chmod +x /usr/bin/fake-grub-probe
+
+mv /usr/sbin/grub-probe /usr/sbin/grub-probe-real
+ln -s /usr/bin/fake-grub-probe /usr/sbin/grub-probe
+
 update-grub
+
+# Restore original grub-probe
+rm /usr/sbin/grub-probe
+mv /usr/sbin/grub-probe-real /usr/sbin/grub-probe
+EOT
+
+# ---- INITRAMFS CONFIGURATION ----
+echo "[4/6] Configuring initramfs..."
+chroot "$WORKDIR" /bin/bash <<'EOT'
+# Set compression to zstd
+echo "COMPRESS=zstd" >> /etc/initramfs-tools/initramfs.conf
+echo 'MODULES=dep' >> /etc/initramfs-tools/initramfs.conf
+echo 'BUSYBOX=y' >> /etc/initramfs-tools/initramfs.conf
+
+# Update initramfs
+update-initramfs -u
 EOT
 
 # ---- PREPARE LIVE SYSTEM ----
-echo "[4/6] Preparing live environment..."
+echo "[5/6] Preparing live environment..."
 chroot "$WORKDIR" /bin/bash <<'EOT'
 # Create live-boot configuration
 mkdir -p /lib/live/mount
@@ -187,13 +222,10 @@ Type 'archy-help' for basic commands
 MOTD
 EOF
 chmod +x /lib/live/config/0030-archy
-
-# Update initramfs
-update-initramfs -u
 EOT
 
 # ---- CREATE ISO STRUCTURE ----
-echo "[5/6] Creating ISO filesystem..."
+echo "[6/6] Creating ISO filesystem..."
 ISO_DIR="$WORKDIR/iso"
 mkdir -p "$ISO_DIR"/{live,boot/grub}
 
@@ -220,7 +252,7 @@ menuentry "Archy Linux (Install)" {
 EOF
 
 # ---- BUILD ISO ----
-echo "[6/6] Generating ISO image..."
+echo "[*] Generating ISO image..."
 grub-mkrescue -o "$ISOFILE" "$ISO_DIR" --volid="ARCHY_LIVE" 2>/dev/null
 
 # ---- CLEANUP ----
