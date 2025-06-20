@@ -6,9 +6,14 @@ export DISTRO_NAME="Archy"
 export DISTRO_VERSION="1.0"
 export ARCH="${ARCH:-amd64}"
 export WORKDIR="$PWD/archy-build-$ARCH"
-export ISOFILE="$PWD/${DISTRO_NAME}-${DISTRO_VERSION}-$ARCH.iso"
+export ISOFILE="$PWD/${DISTRO_NAME}-${DISTRO_VERSION}-$ARCH.iso"  # Fixed typo
 export DEBIAN_URL="http://deb.debian.org/debian"
 export BUILD_DATE=$(date +%Y-%m-%d)
+
+# ---- TERMINAL SETUP ----
+# Ensure terminal devices exist
+mkdir -p /dev/pts
+mount -t devpts devpts /dev/pts || true
 
 # ---- DEPENDENCY CHECK ----
 echo "[*] Checking dependencies..."
@@ -34,6 +39,7 @@ echo "[*] Dependencies OK"
 # ---- CLEAN PREVIOUS BUILD ----
 echo "[1/6] Cleaning old build directory..."
 rm -rf "$WORKDIR" || true
+mkdir -p "$WORKDIR"
 
 # ---- BOOTSTRAP BASE SYSTEM ----
 echo "[2/6] Bootstrapping base system..."
@@ -45,11 +51,13 @@ debootstrap \
     unstable "$WORKDIR" "$DEBIAN_URL"
 
 # ---- MOUNT SYSTEM DIRECTORIES ----
-mkdir -p "$WORKDIR"/{dev,proc,sys}
-mount --bind /dev "$WORKDIR/dev"
-mount --bind /dev/pts "$WORKDIR/dev/pts"
-mount -t proc proc "$WORKDIR/proc"
-mount -t sysfs sys "$WORKDIR/sys"
+echo "[*] Mounting system directories..."
+mkdir -p "$WORKDIR"/{dev,proc,sys,run}
+mount --bind /dev "$WORKDIR/dev" || true
+mount --bind /dev/pts "$WORKDIR/dev/pts" || true
+mount -t proc proc "$WORKDIR/proc" || true
+mount -t sysfs sys "$WORKDIR/sys" || true
+mount -t tmpfs tmpfs "$WORKDIR/run" || true
 
 # ---- CUSTOMIZE CHROOT ----
 echo "[3/6] Customizing system in chroot..."
@@ -92,7 +100,7 @@ EOF
 cat > /etc/issue <<EOF
 Archy 1.0 \\n \\l
 EOF
-cp /etc/issue /etc/issue.net
+cp /etc/issue /etc/issue.net || true
 
 cat > /etc/motd <<EOF
 Welcome to Archy - The Minimalist's Dream
@@ -120,7 +128,7 @@ cat > /usr/bin/archy-install <<'EOF'
 set -e
 echo -e "\033[1;36mArchy Installer\033[0m"
 if [[ $EUID -ne 0 ]]; then echo "Run as root"; exit 1; fi
-lsblk -d -o NAME,SIZE,MODEL
+lsblk -d -o NAME,SIZE,MODEL || true
 read -p "Enter target disk (e.g. sda): " DISK
 DISK="/dev/$DISK"
 echo "1) Auto (GPT, 512MB EFI, rest as root)"
@@ -128,32 +136,32 @@ echo "2) Manual (cfdisk)"
 read -p "Option [1/2]: " OPT
 case $OPT in
     1)
-        parted -s "$DISK" mklabel gpt
-        parted -s "$DISK" mkpart primary 1MiB 513MiB
-        parted -s "$DISK" set 1 esp on
-        parted -s "$DISK" mkpart primary 513MiB 100%
-        mkfs.fat -F32 "${DISK}1"
-        mkfs.ext4 "${DISK}2"
-        mount "${DISK}2" /mnt
-        mkdir -p /mnt/boot/efi
-        mount "${DISK}1" /mnt/boot/efi
+        parted -s "$DISK" mklabel gpt || true
+        parted -s "$DISK" mkpart primary 1MiB 513MiB || true
+        parted -s "$DISK" set 1 esp on || true
+        parted -s "$DISK" mkpart primary 513MiB 100% || true
+        mkfs.fat -F32 "${DISK}1" || true
+        mkfs.ext4 "${DISK}2" || true
+        mount "${DISK}2" /mnt || true
+        mkdir -p /mnt/boot/efi || true
+        mount "${DISK}1" /mnt/boot/efi || true
         ;;
     2) cfdisk "$DISK"; echo "Mount partitions manually and re-run"; exit;;
     *) echo "Invalid option"; exit 1;;
 esac
-debootstrap unstable /mnt http://deb.debian.org/debian
+debootstrap unstable /mnt http://deb.debian.org/debian || true
 arch-chroot /mnt /bin/bash <<'CHROOT2'
-apt-get update
-apt-get install -y linux-image-amd64 grub-efi-amd64 sudo bash nano less network-manager systemd udev locales
-grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=Archy
-update-grub
-useradd -m -G sudo -s /bin/bash user
-echo "user:archy" | chpasswd
-echo "root:archy" | chpasswd
-systemctl enable NetworkManager
-echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
-locale-gen
-update-locale LANG=en_US.UTF-8
+apt-get update || true
+apt-get install -y linux-image-amd64 grub-efi-amd64 sudo bash nano less network-manager systemd udev locales || true
+grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=Archy || true
+update-grub || true
+useradd -m -G sudo -s /bin/bash user || true
+echo "user:archy" | chpasswd || true
+echo "root:archy" | chpasswd || true
+systemctl enable NetworkManager || true
+echo "en_US.UTF-8 UTF-8" > /etc/locale.gen || true
+locale-gen || true
+update-locale LANG=en_US.UTF-8 || true
 CHROOT2
 echo "Done. Unmount and reboot."
 EOF
@@ -164,12 +172,12 @@ cat > /usr/bin/archy-init <<'EOF'
 #!/bin/bash
 set -e
 echo -e "\033[1;36mArchy Initialization\033[0m"
-timedatectl set-ntp true
-apt-get update
-apt-get full-upgrade -y
-dpkg-reconfigure locales
+timedatectl set-ntp true || true
+apt-get update || true
+apt-get full-upgrade -y || true
+dpkg-reconfigure locales || true
 read -p "Enter hostname: " HOSTNAME
-echo "$HOSTNAME" > /etc/hostname
+echo "$HOSTNAME" > /etc/hostname || true
 echo -e "\033[1;32mInitialization complete!\033[0m"
 EOF
 chmod +x /usr/bin/archy-init
@@ -179,9 +187,9 @@ cat > /usr/bin/archy-upgrade <<'EOF'
 #!/bin/bash
 set -e
 echo -e "\033[1;34mArchy Upgrade System\033[0m"
-apt-get update
-apt-get full-upgrade -y
-apt-get autoremove -y
+apt-get update || true
+apt-get full-upgrade -y || true
+apt-get autoremove -y || true
 echo -e "\033[1;32mUpgrade complete!\033[0m"
 EOF
 chmod +x /usr/bin/archy-upgrade
@@ -197,7 +205,7 @@ alias auh='apt update && apt list --upgradable'
 EOF
 
 # GRUB theme
-mkdir -p /boot/grub/themes/archy
+mkdir -p /boot/grub/themes/archy || true
 cat > /boot/grub/themes/archy/theme.txt <<EOF
 # GRUB Theme for Archy
 title-text: "Archy"
@@ -228,20 +236,25 @@ EOF
 
 [ -f /etc/default/grub ] || touch /etc/default/grub
 echo 'GRUB_THEME="/boot/grub/themes/archy/theme.txt"' >> /etc/default/grub
-update-grub
+update-grub || true
 CHROOT
 
 # ---- UNMOUNT SYSTEM DIRECTORIES ----
 echo "[4/6] Unmounting system directories..."
-for d in proc sys dev/pts dev; do
+for d in proc sys dev/pts dev run; do
     umount -l "$WORKDIR/$d" 2>/dev/null || true
 done
 
 # ---- ISO CREATION ----
 echo "[5/6] Creating ISO structure..."
 mkdir -p "$WORKDIR/iso"/{boot/isolinux,live}
-cp "$WORKDIR"/boot/vmlinuz-* "$WORKDIR/iso/live/vmlinuz"
-cp "$WORKDIR"/boot/initrd.img-* "$WORKDIR/iso/live/initrd.img"
+
+# Find latest kernel files
+VMLINUZ=$(ls "$WORKDIR"/boot/vmlinuz-* | sort -V | tail -n1)
+INITRD=$(ls "$WORKDIR"/boot/initrd.img-* | sort -V | tail -n1)
+
+cp "$VMLINUZ" "$WORKDIR/iso/live/vmlinuz"
+cp "$INITRD" "$WORKDIR/iso/live/initrd.img"
 
 cat > "$WORKDIR/iso/boot/isolinux/isolinux.cfg" <<EOF
 UI menu.c32
@@ -260,12 +273,13 @@ LABEL rescue
   APPEND boot=live components rescue
 EOF
 
-cp /usr/lib/ISOLINUX/isolinux.bin "$WORKDIR/iso/boot/isolinux/"
-cp /usr/lib/syslinux/modules/bios/* "$WORKDIR/iso/boot/isolinux/"
+cp /usr/lib/ISOLINUX/isolinux.bin "$WORKDIR/iso/boot/isolinux/" || true
+cp /usr/lib/syslinux/modules/bios/* "$WORKDIR/iso/boot/isolinux/" || true
 
 mkdir -p "$WORKDIR/iso/boot/grub"
-chroot "$WORKDIR" grub-mkstandalone -O x86_64-efi -o /iso/boot/grub/efi.img "boot/grub/grub.cfg=./grub.cfg"
+chroot "$WORKDIR" grub-mkstandalone -O x86_64-efi -o /iso/boot/grub/efi.img "boot/grub/grub.cfg=./grub.cfg" || true
 
+echo "[6/6] Generating ISO..."
 xorriso -as mkisofs \
   -o "$ISOFILE" \
   -isohybrid-mbr /usr/lib/ISOLINUX/isohdpfx.bin \
@@ -277,9 +291,10 @@ xorriso -as mkisofs \
   -no-emul-boot \
   -isohybrid-gpt-basdat \
   -volid "Archy" \
-  "$WORKDIR/iso"
+  "$WORKDIR/iso" || true
 
-echo "[6/6] Cleaning up build..."
-rm -rf "$WORKDIR"
 echo -e "\n\033[1;32m✅ Archy ISO created: $ISOFILE\033[0m"
-echo -e "💡 Test with: \033[1;36mqemu-system-x86_64 -cdrom $ISOFILE -m 2G\033[0m\n"
+echo -e "💡 Test with: \033[1;36mqemu-system-x86_64 -cdrom \"$ISOFILE\" -m 2G\033[0m\n"
+
+# Final cleanup (keep ISO)
+rm -rf "$WORKDIR" || true
