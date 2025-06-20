@@ -10,22 +10,36 @@ export ISOFILE="$PWD/${DISTRO_NAME}-${DISTRO_VERSION}-$ARCH.iso"
 export DEBIAN_URL="http://deb.debian.org/debian"
 export BUILD_DATE=$(date +%Y-%m-%d)
 
+# === Check dependencies ===
+for pkg in debootstrap grub2 xorriso isolinux syslinux-common parted mkfs.fat mkfs.ext4 chroot; do
+    if ! command -v $pkg &>/dev/null; then
+        echo "Missing dependency: $pkg. Installing..."
+        apt update && apt install -y $pkg
+    fi
+done
+
 # === Clean old build ===
 echo "[1/6] 🧹 Cleaning old build..."
-sudo rm -rf "$WORKDIR"
+rm -rf "$WORKDIR"
 
 # === Create minimal base ===
 echo "[2/6] 🏗️  Creating minimal base system..."
-sudo debootstrap \
+debootstrap \
     --arch="$ARCH" \
     --variant=minbase \
     --exclude=debian-archive-keyring,debian-faq,debian-reference,debian-installer \
     --include=apt,dpkg,linux-image-$ARCH,systemd \
     unstable "$WORKDIR" "$DEBIAN_URL"
 
+# === Mount system directories for chroot ===
+mount --bind /dev "$WORKDIR/dev"
+mount --bind /dev/pts "$WORKDIR/dev/pts"
+mount --bind /proc "$WORKDIR/proc"
+mount --bind /sys "$WORKDIR/sys"
+
 # === Chroot system customization ===
 echo "[3/6] 🎨 Customizing Archy system..."
-sudo chroot "$WORKDIR" /bin/bash <<'EOF'
+chroot "$WORKDIR" /bin/bash <<'EOF'
 set -e
 
 # Remove Debian branding and docs
@@ -311,9 +325,15 @@ echo 'GRUB_THEME="/boot/grub/themes/archy/theme.txt"' >> /etc/default/grub
 update-grub
 EOF
 
+# === Unmount system directories ===
+umount "$WORKDIR/dev/pts"
+umount "$WORKDIR/dev"
+umount "$WORKDIR/proc"
+umount "$WORKDIR/sys"
+
 # === ISO Creation ===
 echo "[4/6] 📀 Creating ISO structure..."
-sudo chroot "$WORKDIR" /bin/bash <<'EOF'
+chroot "$WORKDIR" /bin/bash <<'EOF'
 set -e
 
 # Create ISO structure
@@ -368,10 +388,10 @@ EOF
 
 # === Finalize ===
 echo "[5/6] 🔄 Moving ISO..."
-sudo mv "$WORKDIR/Archy.iso" "$ISOFILE"
+mv "$WORKDIR/Archy.iso" "$ISOFILE"
 
 echo "[6/6] 🧹 Cleaning up..."
-sudo rm -rf "$WORKDIR"
+rm -rf "$WORKDIR"
 
 # === Completion ===
 echo -e "\n\033[1;32m✅ $DISTRO_NAME ISO successfully created: $ISOFILE\033[0m"
