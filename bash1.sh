@@ -55,14 +55,14 @@ for mnt in dev dev/pts proc sys run; do
     mount --bind "/$mnt" "$WORKDIR/$mnt"
 done
 
-# Set user/root password after mounts are active
+# ---- SYSTEM CONFIGURATION ----
 echo "[*] Setting user/root passwords..."
 chroot "$WORKDIR" /bin/bash -c "
+useradd -m -s /bin/bash user
 echo 'user:archy' | chpasswd
 echo 'root:archy' | chpasswd
 "
 
-# ---- SYSTEM CONFIGURATION ----
 echo "[3/6] Configuring system..."
 chroot "$WORKDIR" /bin/bash <<EOT
 set -e
@@ -121,7 +121,8 @@ done
 echo "[5/6] Preparing ISO filesystem..."
 ISO_DIR="$WORKDIR-iso"
 mkdir -p "$ISO_DIR"/live
-mkdir -p "$ISO_DIR/boot/grub"
+mkdir -p "$ISO_DIR/boot/grub/i386-pc"
+mkdir -p "$ISO_DIR/EFI/BOOT"
 
 VMLINUZ=$(find "$WORKDIR/boot" -name vmlinuz-* | sort -V | tail -n1)
 INITRD=$(find "$WORKDIR/boot" -name initrd.img-* | sort -V | tail -n1)
@@ -139,34 +140,23 @@ menuentry "Archy Linux" {
 }
 EOF
 
-mkdir -p "$ISO_DIR/EFI/BOOT"
-grub-mkstandalone -O x86_64-efi -o "$ISO_DIR/EFI/BOOT/BOOTX64.EFI" \
-    "boot/grub/grub.cfg=$ISO_DIR/boot/grub/grub.cfg"
-
-# Generate BIOS eltorito.img
-mkdir -p "$ISO_DIR/boot/grub/i386-pc"
-grub-mkimage -O i386-pc -o "$ISO_DIR/boot/grub/i386-pc/eltorito.img" \
-    -p /boot/grub biosdisk iso9660 multiboot normal configfile linux
+cp /usr/lib/grub/i386-pc/* "$ISO_DIR/boot/grub/i386-pc/"
+cp /usr/lib/ISOLINUX/isohdpfx.bin "$ISO_DIR/isohdpfx.bin"
 
 # ---- ISO CREATION ----
 echo "[6/6] Creating hybrid ISO..."
 xorriso -as mkisofs \
   -volid "ARCHY_LIVE" \
   -o "$ISOFILE" \
-  -r -J -joliet-long \
-  -iso-level 3 \
-  -partition_offset 16 \
-  --grub2-mbr /usr/lib/grub/i386-pc/boot_hybrid.img \
-  --mbr-force-bootable \
-  -append_partition 2 0xEF "$ISO_DIR/EFI/BOOT/BOOTX64.EFI" \
-  -appended_part_as_gpt \
+  -isohybrid-mbr "$ISO_DIR/isohdpfx.bin" \
   -c boot/boot.cat \
   -b boot/grub/i386-pc/eltorito.img \
-  -no-emul-boot -boot-load-size 4 -boot-info-table \
+     -no-emul-boot -boot-load-size 4 -boot-info-table \
   -eltorito-alt-boot \
-  -e '--interval:appended_partition_2:all::' \
-  -no-emul-boot \
+  -e EFI/BOOT/BOOTX64.EFI \
+     -no-emul-boot \
   -isohybrid-gpt-basdat \
+  -r -J -joliet-long \
   "$ISO_DIR"
 
 # ---- DONE ----
