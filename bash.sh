@@ -1,7 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-# === CONFIGURATION ===
 DISTRO_NAME="Archy"
 ARCH="amd64"
 RELEASE="sid"
@@ -10,14 +9,18 @@ WORKDIR="$PWD/archy-build"
 CHROOT="$WORKDIR/chroot"
 ISOFILE="$PWD/${DISTRO_NAME}.iso"
 
-echo "[+] Cleaning previous build..."
+echo "[+] Installing required packages..."
+sudo apt update
+sudo apt install -y debootstrap live-build squashfs-tools grub-pc-bin grub-efi-amd64-bin grub-efi-bin mtools xorriso
+
+echo "[+] Cleaning old build..."
 sudo umount "$CHROOT/dev" || true
 sudo umount "$CHROOT/proc" || true
 sudo umount "$CHROOT/sys" || true
 sudo rm -rf "$WORKDIR"
 mkdir -p "$CHROOT"
 
-echo "[+] Bootstrapping Debian Sid..."
+echo "[+] Bootstrapping Debian Sid base..."
 sudo debootstrap --arch="$ARCH" "$RELEASE" "$CHROOT" "$MIRROR"
 
 echo "[+] Mounting virtual filesystems..."
@@ -26,7 +29,7 @@ for dir in dev proc sys; do
     sudo mount --bind /$dir "$CHROOT/$dir"
 done
 
-echo "[+] Configuring Archy in chroot..."
+echo "[+] Setting up inside chroot..."
 sudo chroot "$CHROOT" /bin/bash <<'EOL'
 set -e
 export DEBIAN_FRONTEND=noninteractive
@@ -37,38 +40,40 @@ cat > /etc/apt/sources.list <<EOF
 deb http://deb.debian.org/debian sid main contrib non-free non-free-firmware
 EOF
 
+apt clean
 apt update
-apt -y install locales
+
+echo "[+] Installing base system..."
+apt install -y locales
 locale-gen en_US.UTF-8
 export LANG=en_US.UTF-8
 
-echo "[+] Installing base packages..."
 apt install -y \
     systemd systemd-sysv grub-pc grub-efi-amd64-bin linux-image-amd64 \
     sudo net-tools ifupdown isc-dhcp-client iputils-ping \
     ca-certificates curl wget gnupg vim bash-completion \
     live-boot live-config live-build
 
-echo "[+] Fixing keyboard setup issues..."
+echo "[+] Disabling interactive keyboard config..."
 echo 'keyboard-configuration keyboard-configuration/layoutcode select us' | debconf-set-selections
 echo 'keyboard-configuration keyboard-configuration/modelcode select pc105' | debconf-set-selections
 apt purge -y console-setup keyboard-configuration || true
 
-echo "[+] Creating user 'archy'..."
+echo "[+] Creating user 'archy' with sudo access..."
 useradd -m -s /bin/bash archy
 echo "archy:archy" | chpasswd
 usermod -aG sudo archy
 
-echo "[+] Debranding Debian → Archy..."
+echo "[+] Rebranding to Archy..."
 find /etc /usr/share -type f -readable -writable -exec sed -i 's/Debian/Archy/g' {} + 2>/dev/null || true
 EOL
 
-echo "[+] Unmounting virtual filesystems..."
+echo "[+] Unmounting chroot..."
 for dir in dev proc sys; do
     sudo umount "$CHROOT/$dir" || true
 done
 
-echo "[+] Preparing ISO build directory..."
+echo "[+] Preparing live-build config..."
 cd "$WORKDIR"
 mkdir -p config/includes.chroot
 cp -aT "$CHROOT" config/includes.chroot
@@ -89,7 +94,7 @@ lb config noauto \
   --mirror-binary "$MIRROR" \
   --debian-installer live
 
-echo "[+] Building the Archy ISO (hang tight)..."
+echo "[+] Building ISO... This will take a while ☕"
 sudo lb build
 
 echo "[+] Moving final ISO to $ISOFILE..."
