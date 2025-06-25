@@ -1,3 +1,3 @@
-sudo apt update && sudo apt install -y \
-    debootstrap live-build squashfs-tools grub-pc-bin grub-efi-amd64-bin \
-    grub-efi-bin mtools xorriso
+sudo umount -lf archy-build/chroot/{dev,proc,sys} 2>/dev/null || true
+sudo chattr -i -R archy-build 2>/dev/null || true
+sudo rm -rf archy-build
