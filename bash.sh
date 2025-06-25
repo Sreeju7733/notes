@@ -1,6 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
+# === Config ===
 DISTRO_NAME="Archy"
 ARCH="amd64"
 RELEASE="sid"
@@ -9,35 +10,45 @@ WORKDIR="$PWD/archy-build"
 CHROOT="$WORKDIR/chroot"
 ISOFILE="$PWD/${DISTRO_NAME}.iso"
 
-echo "[+] Cleaning previous build..."
+# === Full Cleanup ===
+echo "[+] Cleaning up any old build..."
+sudo umount "$CHROOT/dev" || true
+sudo umount "$CHROOT/proc" || true
+sudo umount "$CHROOT/sys" || true
 sudo rm -rf "$WORKDIR"
 mkdir -p "$CHROOT"
 
-echo "[+] Bootstrapping base system..."
+# === Step 1: Bootstrap Debian Sid
+echo "[+] Bootstrapping Debian Sid into chroot..."
 sudo debootstrap --arch="$ARCH" "$RELEASE" "$CHROOT" "$MIRROR"
 
-echo "[+] Binding system dirs for chroot..."
+# === Step 2: Bind mounts
+echo "[+] Mounting virtual filesystems..."
+sudo cp /etc/resolv.conf "$CHROOT/etc/"
 for dir in dev proc sys; do
-    sudo mount --bind /$dir "$CHROOT/$dir"
+  sudo mount --bind /$dir "$CHROOT/$dir"
 done
 
-echo "[+] Configuring chroot environment..."
-sudo chroot "$CHROOT" /bin/bash -c "
+# === Step 3: Configure chroot system
+echo "[+] Entering chroot and setting up Archy base..."
+sudo chroot "$CHROOT" /bin/bash <<'EOL'
 set -e
 
+# Set hostname
 echo archy > /etc/hostname
 
-# Set up Sid rolling repo
+# Set up correct sources.list (Sid only)
 cat > /etc/apt/sources.list <<EOF
-deb $MIRROR sid main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian sid main contrib non-free non-free-firmware
 EOF
 
+# Locale
 apt update
-apt install -y locales
+apt -y install locales
 locale-gen en_US.UTF-8
 export LANG=en_US.UTF-8
 
-echo '[+] Installing core packages...'
+# Install core packages
 apt install -y \
     systemd systemd-sysv grub-pc linux-image-amd64 \
     sudo net-tools ifupdown isc-dhcp-client iputils-ping \
@@ -46,25 +57,28 @@ apt install -y \
 
 # Create user archy
 useradd -m -s /bin/bash archy
-echo 'archy:archy' | chpasswd
+echo "archy:archy" | chpasswd
 usermod -aG sudo archy
 
-# Debranding Debian → Archy (safely)
-echo '[+] Rebranding...'
+# Debrand Debian → Archy
+echo "[*] Debranding..."
 find /etc /usr/share -type f -readable -writable -exec sed -i 's/Debian/Archy/g' {} + 2>/dev/null || true
-"
 
-echo "[+] Cleaning up chroot..."
+EOL
+
+# === Step 4: Unmount
+echo "[+] Cleaning up mounts..."
 for dir in dev proc sys; do
-    sudo umount "$CHROOT/$dir" || true
+  sudo umount "$CHROOT/$dir" || true
 done
 
-echo "[+] Setting up ISO build directory..."
+# === Step 5: Setup ISO
+echo "[+] Preparing ISO build..."
 cd "$WORKDIR"
 mkdir -p config/includes.chroot
-cp -rT "$CHROOT" config/includes.chroot
+cp -aT "$CHROOT" config/includes.chroot
 
-echo "[+] Creating live-build config..."
+echo "[+] Configuring live-build..."
 lb config noauto \
   --mode debian \
   --architectures "$ARCH" \
@@ -80,8 +94,10 @@ lb config noauto \
   --mirror-binary "$MIRROR" \
   --debian-installer live
 
-echo "[+] Building ISO (may take time)..."
+# === Step 6: Build the ISO
+echo "[+] Building Archy ISO (please wait)..."
 sudo lb build
 
+# === Step 7: Rename Output
 mv live-image-$ARCH.hybrid.iso "$ISOFILE"
 echo "✅ DONE: Your Archy ISO is ready → $ISOFILE"
