@@ -16,12 +16,25 @@ sudo apt install -y \
   debootstrap live-build squashfs-tools grub-pc-bin \
   grub-efi-amd64-bin mtools xorriso
 
-echo "[+] Cleaning old chroot and mount points..."
-if mountpoint -q "$CHROOT/dev"; then sudo umount "$CHROOT/dev"; fi
-if mountpoint -q "$CHROOT/proc"; then sudo umount "$CHROOT/proc"; fi
-if mountpoint -q "$CHROOT/sys"; then sudo umount "$CHROOT/sys"; fi
-sudo rm -rf "$CHROOT"
-sudo mkdir -p "$CHROOT"
+echo "[+] Nuking any old build directories, mounts, or cursed files..."
+
+# Lazy force unmount and remove mounts if still attached
+for target in dev proc sys; do
+    if mountpoint -q "$CHROOT/$target"; then
+        echo "[-] Unmounting $target..."
+        sudo umount -lf "$CHROOT/$target"
+    fi
+done
+
+# Remove immutable flags (if chattr messed you up)
+if [ -d "$WORKDIR" ]; then
+    echo "[-] Removing chattr immutables..."
+    sudo chattr -i -R "$WORKDIR" 2>/dev/null || true
+fi
+
+# Now try nuking the entire build directory
+sudo rm -rf "$WORKDIR"
+mkdir -p "$CHROOT"
 
 echo "[+] Bootstrapping Debian Sid base system..."
 sudo debootstrap --arch="$ARCH" "$RELEASE" "$CHROOT" "$MIRROR"
@@ -32,14 +45,13 @@ for dir in dev proc sys; do
     sudo mount --bind /$dir "$CHROOT/$dir"
 done
 
-echo "[+] Running system setup in chroot..."
+echo "[+] Running system setup inside chroot..."
 sudo chroot "$CHROOT" /bin/bash <<'EOL'
 set -e
 export DEBIAN_FRONTEND=noninteractive
 
 echo "archy" > /etc/hostname
 
-# Add Debian Sid sources
 cat > /etc/apt/sources.list <<EOF
 deb http://deb.debian.org/debian sid main contrib non-free non-free-firmware
 EOF
@@ -47,19 +59,19 @@ EOF
 apt clean
 apt update
 
-# Set locale
+# Locales
 apt install -y locales
 locale-gen en_US.UTF-8
 export LANG=en_US.UTF-8
 
-# Base system install
+# Base packages
 apt install -y \
   systemd systemd-sysv grub-pc grub-efi-amd64-bin linux-image-amd64 \
   sudo net-tools ifupdown isc-dhcp-client iputils-ping \
   ca-certificates curl wget gnupg vim bash-completion \
   live-boot live-config live-build
 
-# Keyboard config fix
+# Keyboard setup fixes
 echo 'keyboard-configuration keyboard-configuration/layoutcode select us' | debconf-set-selections
 echo 'keyboard-configuration keyboard-configuration/modelcode select pc105' | debconf-set-selections
 apt purge -y console-setup keyboard-configuration || true
@@ -69,14 +81,14 @@ useradd -m -s /bin/bash archy
 echo "archy:archy" | chpasswd
 usermod -aG sudo archy
 
-# Rebrand to Archy
+# Rebrand from Debian to Archy
 find /etc /usr/share -type f -readable -writable \
   -exec sed -i 's/Debian/Archy/g' {} + 2>/dev/null || true
 EOL
 
 echo "[+] Unmounting virtual filesystems..."
 for dir in dev proc sys; do
-    sudo umount "$CHROOT/$dir" || true
+    sudo umount -lf "$CHROOT/$dir" || true
 done
 
 echo "[+] Preparing live-build structure..."
@@ -100,10 +112,10 @@ lb config noauto \
   --mirror-binary "$MIRROR" \
   --debian-installer live
 
-echo "[+] Building ISO image... This will take a few minutes..."
+echo "[+] Building ISO image... go stretch, this takes a bit 🏋️‍♂️"
 sudo lb build
 
 echo "[+] Moving final ISO to: $ISOFILE"
 mv live-image-$ARCH.hybrid.iso "$ISOFILE"
 
-echo "✅ DONE! Your custom Archy ISO is ready → $ISOFILE"
+echo "✅ Archy ISO is built successfully: $ISOFILE"
