@@ -16,12 +16,12 @@ sudo apt install -y \
   debootstrap live-build squashfs-tools grub-pc-bin \
   grub-efi-amd64-bin mtools xorriso
 
-echo "[+] Cleaning previous build..."
-sudo umount "$CHROOT/dev" || true
-sudo umount "$CHROOT/proc" || true
-sudo umount "$CHROOT/sys" || true
-sudo rm -rf "$WORKDIR"
-mkdir -p "$CHROOT"
+echo "[+] Cleaning old chroot and mount points..."
+if mountpoint -q "$CHROOT/dev"; then sudo umount "$CHROOT/dev"; fi
+if mountpoint -q "$CHROOT/proc"; then sudo umount "$CHROOT/proc"; fi
+if mountpoint -q "$CHROOT/sys"; then sudo umount "$CHROOT/sys"; fi
+sudo rm -rf "$CHROOT"
+sudo mkdir -p "$CHROOT"
 
 echo "[+] Bootstrapping Debian Sid base system..."
 sudo debootstrap --arch="$ARCH" "$RELEASE" "$CHROOT" "$MIRROR"
