@@ -19,7 +19,7 @@ fi
 echo "✅ Filesystem is ext4"
 
 echo "[2/7] 🔥 Cleaning up old build dir & mounts..."
-for d in dev proc sys; do
+for d in dev/pts dev proc sys; do
     sudo umount -lf "$CHROOT/$d" 2>/dev/null || true
 done
 sudo chattr -i -R "$WORKDIR" 2>/dev/null || true
@@ -35,11 +35,12 @@ sudo apt install -y \
 echo "[4/7] 🏗️ Bootstrapping Debian Sid system into $CHROOT"
 sudo debootstrap --arch="$ARCH" "$RELEASE" "$CHROOT" "$MIRROR"
 
-echo "[5/7] 🔩 Mounting virtual filesystems for chroot..."
+echo "[5/7] 🔩 Mounting virtual filesystems for chroot (with /dev/pts)..."
 sudo cp /etc/resolv.conf "$CHROOT/etc/"
-for dir in dev proc sys; do
-    sudo mount --bind /$dir "$CHROOT/$dir"
-done
+sudo mount --bind /dev "$CHROOT/dev"
+sudo mount --bind /proc "$CHROOT/proc"
+sudo mount --bind /sys "$CHROOT/sys"
+sudo mount -t devpts devpts "$CHROOT/dev/pts"
 
 echo "[6/7] 🧰 Configuring Archy inside chroot..."
 sudo chroot "$CHROOT" /bin/bash <<'EOL'
@@ -72,12 +73,11 @@ usermod -aG sudo archy
 echo "[+] Rebranding Debian to Archy..."
 find /etc /usr/share -type f -readable -writable -exec sed -i 's/Debian/Archy/g' {} + 2>/dev/null || true
 
-echo "[+] Cleaning apt cache..."
 apt clean
 EOL
 
 echo "[+] 🔌 Unmounting chroot mounts..."
-for dir in dev proc sys; do
+for dir in dev/pts dev proc sys; do
     sudo umount -lf "$CHROOT/$dir" || true
 done
 
