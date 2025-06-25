@@ -1,6 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
+# === Config ===
 DISTRO_NAME="Archy"
 ARCH="amd64"
 RELEASE="sid"
@@ -9,78 +10,83 @@ WORKDIR="$PWD/archy-build"
 CHROOT="$WORKDIR/chroot"
 ISOFILE="$PWD/${DISTRO_NAME}.iso"
 
-echo "[+] Installing required tools..."
-sudo apt update
-sudo apt install -y debootstrap live-build squashfs-tools grub-pc-bin grub-efi-amd64-bin mtools xorriso
+echo "[1/7] 🔍 Checking filesystem type..."
+FSTYPE=$(df -T "$PWD" | tail -1 | awk '{print $2}')
+if [[ "$FSTYPE" != "ext4" ]]; then
+  echo "❌ ERROR: You must run this from an ext4 partition. You're on: $FSTYPE"
+  exit 1
+fi
+echo "✅ Filesystem is ext4"
 
-echo "[+] 🔥 Nuking old build directory..."
-sudo umount -lf "$CHROOT/dev" 2>/dev/null || true
-sudo umount -lf "$CHROOT/proc" 2>/dev/null || true
-sudo umount -lf "$CHROOT/sys" 2>/dev/null || true
+echo "[2/7] 🔥 Cleaning up old build dir & mounts..."
+for d in dev proc sys; do
+    sudo umount -lf "$CHROOT/$d" 2>/dev/null || true
+done
 sudo chattr -i -R "$WORKDIR" 2>/dev/null || true
 sudo rm -rf "$WORKDIR"
 mkdir -p "$CHROOT"
 
-echo "[+] 💣 Bootstrapping Debian Sid with --force-overwrite (take that error!)"
-sudo debootstrap --arch="$ARCH" --force-overwrite "$RELEASE" "$CHROOT" "$MIRROR"
+echo "[3/7] 📦 Installing required packages..."
+sudo apt update
+sudo apt install -y \
+  debootstrap live-build squashfs-tools grub-pc-bin \
+  grub-efi-amd64-bin mtools xorriso sudo curl wget
 
-echo "[+] 🧱 Mounting virtual filesystems..."
+echo "[4/7] 🏗️ Bootstrapping Debian Sid system into $CHROOT"
+sudo debootstrap --arch="$ARCH" "$RELEASE" "$CHROOT" "$MIRROR"
+
+echo "[5/7] 🔩 Mounting virtual filesystems for chroot..."
 sudo cp /etc/resolv.conf "$CHROOT/etc/"
-for d in dev proc sys; do
-    sudo mount --bind /$d "$CHROOT/$d"
+for dir in dev proc sys; do
+    sudo mount --bind /$dir "$CHROOT/$dir"
 done
 
-echo "[+] 🛠️ Setting up Archy inside chroot..."
+echo "[6/7] 🧰 Configuring Archy inside chroot..."
 sudo chroot "$CHROOT" /bin/bash <<'EOL'
 set -e
 export DEBIAN_FRONTEND=noninteractive
 echo "archy" > /etc/hostname
 
-echo "[+] 📦 Configuring APT sources..."
+echo "[+] Setting APT sources..."
 cat > /etc/apt/sources.list <<EOF
 deb http://deb.debian.org/debian sid main contrib non-free non-free-firmware
 EOF
 
-apt clean
 apt update
-
-echo "[+] 🌍 Generating locale..."
 apt install -y locales
 locale-gen en_US.UTF-8
 export LANG=en_US.UTF-8
 
-echo "[+] 🚀 Installing base packages..."
+echo "[+] Installing base system packages..."
 apt install -y \
   systemd systemd-sysv grub-pc grub-efi-amd64-bin linux-image-amd64 \
-  sudo net-tools ifupdown isc-dhcp-client iputils-ping \
+  net-tools ifupdown isc-dhcp-client iputils-ping \
   ca-certificates curl wget gnupg vim bash-completion \
-  live-boot live-config live-build
+  live-boot live-config live-build sudo
 
-echo "[+] ⌨️ Fixing keyboard config..."
-echo 'keyboard-configuration keyboard-configuration/layoutcode select us' | debconf-set-selections
-echo 'keyboard-configuration keyboard-configuration/modelcode select pc105' | debconf-set-selections
-apt purge -y console-setup keyboard-configuration || true
-
-echo "[+] 👤 Creating user archy..."
+echo "[+] Creating user archy..."
 useradd -m -s /bin/bash archy
 echo "archy:archy" | chpasswd
 usermod -aG sudo archy
 
-echo "[+] 🎨 Rebranding from Debian to Archy..."
+echo "[+] Rebranding Debian to Archy..."
 find /etc /usr/share -type f -readable -writable -exec sed -i 's/Debian/Archy/g' {} + 2>/dev/null || true
+
+echo "[+] Cleaning apt cache..."
+apt clean
 EOL
 
-echo "[+] 🧼 Unmounting chroot bind mounts..."
-for d in dev proc sys; do
-    sudo umount -lf "$CHROOT/$d" || true
+echo "[+] 🔌 Unmounting chroot mounts..."
+for dir in dev proc sys; do
+    sudo umount -lf "$CHROOT/$dir" || true
 done
 
-echo "[+] 📁 Preparing live-build configuration..."
+echo "[7/7] 💿 Preparing and building ISO..."
+
 cd "$WORKDIR"
 mkdir -p config/includes.chroot
 cp -aT "$CHROOT" config/includes.chroot
 
-echo "[+] 🔧 Configuring live-build (ISO setup)..."
 lb config noauto \
   --mode debian \
   --architectures "$ARCH" \
@@ -96,10 +102,7 @@ lb config noauto \
   --mirror-binary "$MIRROR" \
   --debian-installer live
 
-echo "[+] 🏗️ Building the ISO..."
 sudo lb build
 
-echo "[+] 💾 Moving ISO to final location..."
 mv live-image-$ARCH.hybrid.iso "$ISOFILE"
-
-echo "✅ Archy ISO ready: $ISOFILE"
+echo "✅ ISO successfully built: $ISOFILE"
