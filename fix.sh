@@ -1,3 +1,8 @@
-sudo umount -lf archy-build/chroot/{dev,proc,sys} 2>/dev/null || true
-sudo chattr -i -R archy-build 2>/dev/null || true
-sudo rm -rf archy-build
+sudo tee /home/sreeju/os1/archy-build/chroot/etc/apt/sources.list <<EOF
+deb http://deb.debian.org/debian sid main contrib non-free non-free-firmware
+deb http://security.debian.org/debian-security sid-security main
+EOF
+
+sudo cp /etc/resolv.conf /home/sreeju/os1/archy-build/chroot/etc/resolv.conf
+
+sudo chroot /home/sreeju/os1/archy-build/chroot
