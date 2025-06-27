@@ -1,6 +1,2 @@
-sudo tee /home/sreeju/os1/archy-build/chroot/etc/apt/sources.list <<EOF
-deb http://deb.debian.org/debian sid main contrib non-free non-free-firmware
-EOF
-sudo chroot /home/sreeju/os1/archy-build/chroot
-apt update
-
+echo "127.0.0.1 localhost archy" >> /etc/hosts
+mount | grep "$CHROOT/dev/pts" >/dev/null || sudo mount -t devpts devpts "$CHROOT/dev/pts"
