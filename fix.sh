@@ -1,36 +1,46 @@
 #!/bin/bash
 
-echo "🔒 Stopping SDDM..."
-sudo systemctl stop sddm
+echo "🚀 Starting full KDE wipe and LXQt deploy..."
 
-echo "🔥 Purging KDE/Plasma-related packages..."
-sudo apt purge sddm baloo* akonadi* libkf* libkworkspace* libplasma* kde* plasma* kwin* kio* kubuntu* -y
+# 1. Remove all KDE, Plasma, Kubuntu, and related packages
+echo "🧼 Removing KDE and Kubuntu bloat..."
+sudo apt purge '^kde' '^plasma' '^kubuntu' '^kwin' '^akonadi' '^baloo' '^kmail' '^kio' '^kcm' '^kscreenlocker' '^okular' '^kate' '^kdeconnect' '^kwayland' '^qt5' '^qt6' '^sddm-theme-' -y
 sudo apt autoremove --purge -y
+sudo apt clean
 
-echo "🧹 Removing user KDE/Plasma configs..."
+# 2. Remove KDE & Plasma user config files
+echo "🧹 Cleaning KDE configs from home directory..."
 rm -rf ~/.kde ~/.kde4 \
        ~/.config/k* ~/.config/plasma* ~/.config/kwin* \
-       ~/.config/dolphin* ~/.config/akonadi* \
-       ~/.config/xdg-desktop-portal-kde \
-       ~/.local/share/k* ~/.local/share/plasma* \
-       ~/.local/share/konsole ~/.local/share/kscreen \
-       ~/.cache/ksycoca* ~/.cache/plasma* ~/.cache/kwin* ~/.cache/akonadi* \
-       ~/.config/gtkrc* ~/.config/Trolltech.conf ~/.config/qt* \
-       ~/.local/share/krunner ~/.local/share/RecentDocuments ~/.local/share/akonadi
+       ~/.config/dolphin* ~/.config/akonadi* ~/.config/kscreenlocker* \
+       ~/.local/share/k* ~/.local/share/plasma* ~/.local/share/akonadi* \
+       ~/.cache/ksycoca* ~/.cache/plasma* ~/.cache/kwin* \
+       ~/.config/qt* ~/.local/share/konsole ~/.local/share/krunner
 
-echo "🧯 Removing system KDE configs and themes..."
-sudo rm -rf /etc/xdg/k* /etc/xdg/plasma* /etc/xdg/kwin* \
-            /etc/xdg/kscreenlockerrc /usr/share/k* /usr/share/plasma* \
-            /usr/share/sddm/themes/* /usr/share/konsole /var/lib/sddm
-
-echo "🔄 Updating APT..."
+# 3. Install minimal LXQt and SDDM
+echo "📦 Installing LXQt + SDDM..."
 sudo apt update
-
-echo "🚀 Reinstalling full Kubuntu desktop..."
-sudo apt install kubuntu-desktop -y
-
-echo "⚙️ Enabling SDDM..."
+sudo apt install --no-install-recommends lxqt sddm pcmanfm-qt lxterminal -y
 sudo systemctl enable sddm
 
-echo "🔁 Rebooting now..."
-sudo reboot
+# 4. Install and configure fingerprint login
+echo "🔐 Setting up fingerprint login..."
+sudo apt install fprintd libpam-fprintd -y
+fprintd-enroll
+
+# Add fingerprint to PAM (for SDDM)
+echo "✍️ Editing PAM config for SDDM..."
+sudo sed -i '1iauth sufficient pam_fprintd.so' /etc/pam.d/sddm
+
+# 5. Install power management tools
+echo "🔋 Installing power-saving tools..."
+sudo apt install tlp powertop -y
+sudo systemctl enable tlp
+sudo tlp start
+
+# 6. Optional: Install KDE tools you still like
+echo "📁 Installing useful KDE tools..."
+sudo apt install dolphin systemsettings -y
+
+# 7. Done!
+echo "✅ LXQt is now your minimal, stable desktop. KDE is gone. System is optimized. Reboot and select LXQt in SDDM!"
