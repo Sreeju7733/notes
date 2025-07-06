@@ -1,0 +1,39 @@
+#%PAM-1.0
+
+# Block login if they are globally disabled
+auth    requisite       pam_nologin.so
+auth    required        pam_succeed_if.so user != root quiet_success
+
+# Allow passwordless login for users in the nopasswdlogin group
+auth    sufficient      pam_succeed_if.so user ingroup nopasswdlogin
+
+# Standard password authentication
+@include common-auth
+
+# gnome_keyring and kwallet – optional session components (disabled with - prefix)
+-auth   optional        pam_gnome_keyring.so
+-auth   optional        pam_kwallet5.so
+
+@include common-account
+
+# SELinux – usually not active on Ubuntu/Kubuntu, but kept for compatibility
+session [success=ok ignore=ignore module_unknown=ignore default=bad] pam_selinux.so close
+
+# Session setup
+session optional        pam_keyinit.so force revoke
+session required        pam_limits.so
+session required        pam_loginuid.so
+@include common-session
+
+# SELinux open
+session [success=ok ignore=ignore module_unknown=ignore default=bad] pam_selinux.so open
+
+# Optional session helpers (disabled)
+-session optional       pam_gnome_keyring.so auto_start
+-session optional       pam_kwallet5.so auto_start
+
+@include common-password
+
+# Environment setup
+session required        pam_env.so
+session required        pam_env.so envfile=/etc/default/locale user_readenv=1
