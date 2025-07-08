@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="A complete and modern cheat sheet of APT package manager commands for Ubuntu and Debian-based Linux systems." />
+  <meta name="keywords" content="apt, apt commands, apt cheat sheet, linux package manager, ubuntu apt, debian apt, apt install, apt update, modern apt commands" />
+  <meta name="author" content="Sreeju" />
+  <meta property="og:title" content="Modern APT Commands Cheatsheet (2025)" />
+  <meta property="og:description" content="Modern, safe, and essential APT commands for Linux users. Updated for 2025." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="https://sreeju7733.github.io/linux/assets/apt-cheatsheet-preview.png" />
+  <meta property="og:url" content="https://sreeju7733.github.io/linux/apt-cheatsheet" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Modern APT Commands Cheatsheet (2025)" />
+  <meta name="twitter:description" content="Master the apt command line with this updated, safe and modern cheat sheet." />
+  <meta name="twitter:image" content="https://sreeju7733.github.io/linux/assets/apt-cheatsheet-preview.png" />
+  <title>Modern APT Commands Cheatsheet (2025)</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #121212;
+      color: #f1f1f1;
+      line-height: 1.6;
+      padding: 2rem;
+      max-width: 800px;
+      margin: auto;
+    }
+    h1, h2 {
+      color: #00ffd5;
+      border-bottom: 2px solid #444;
+      padding-bottom: 0.3rem;
+    }
+    code {
+      background-color: #222;
+      color: #00ff90;
+      padding: 0.2rem 0.4rem;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+    pre {
+      background: #1e1e1e;
+      padding: 1rem;
+      border-radius: 6px;
+      overflow-x: auto;
+    }
+    .section {
+      margin-bottom: 2rem;
+    }
+    .note {
+      font-size: 0.9em;
+      color: #aaa;
+    }
+    a {
+      color: #80dfff;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>🧰 Modern APT Commands Cheatsheet (2025 Edition)</h1>
+    <p>This is a practical and SEO-optimized reference guide for safe, essential <strong>APT package manager commands</strong> on modern Debian-based Linux systems like <strong>Ubuntu</strong>.</p>
+
+  <div class="section">
+    <h2>📥 1. Update Package List</h2>
+    <pre><code>sudo apt update</code></pre>
+    <p>Fetches the latest list of available packages.</p>
+  </div>
+
+  <div class="section">
+    <h2>🔄 2. Upgrade Installed Packages</h2>
+    <pre><code>sudo apt upgrade</code></pre>
+    <p>Safely upgrades all packages without removing anything.</p>
+  </div>
+
+  <div class="section">
+    <h2>🧠 3. Full Upgrade</h2>
+    <pre><code>sudo apt full-upgrade</code></pre>
+    <p>Handles changing dependencies by removing/installing packages.</p>
+  </div>
+
+  <div class="section">
+    <h2>🧹 4. Autoremove Unused Packages</h2>
+    <pre><code>sudo apt autoremove</code></pre>
+    <p>Removes unnecessary dependencies no longer needed.</p>
+  </div>
+
+  <div class="section">
+    <h2>🚿 5. Purge Autoremove</h2>
+    <pre><code>sudo apt autoremove --purge</code></pre>
+    <p>Same as above but also removes leftover config files.</p>
+  </div>
+
+  <div class="section">
+    <h2>🧼 6. Clean Cached Packages</h2>
+    <pre><code>sudo apt clean</code></pre>
+    <p>Clears cached .deb files in <code>/var/cache/apt/archives</code>.</p>
+  </div>
+
+  <div class="section">
+    <h2>📦 7. Install Package</h2>
+    <pre><code>sudo apt install &lt;package&gt;</code></pre>
+    <p>Installs any package by name.</p>
+  </div>
+
+  <div class="section">
+    <h2>❌ 8. Remove Package</h2>
+    <pre><code>sudo apt remove &lt;package&gt;</code></pre>
+    <p>Removes a package but keeps configuration files.</p>
+  </div>
+
+  <div class="section">
+    <h2>🔥 9. Purge Package</h2>
+    <pre><code>sudo apt purge &lt;package&gt;</code></pre>
+    <p>Removes both package and its config files.</p>
+  </div>
+
+  <div class="section">
+    <h2>💀 10. Purge + Autoremove</h2>
+    <pre><code>sudo apt purge --auto-remove &lt;package&gt;</code></pre>
+    <p>Completely wipes the package and unused dependencies.</p>
+  </div>
+
+  <div class="section">
+    <h2>🛠️ 11. Fix Broken Installs</h2>
+    <pre><code>sudo apt --fix-broken install</code></pre>
+    <p>Tries to fix broken or incomplete installs.</p>
+  </div>
+
+  <div class="section">
+    <h2>🔍 12. Search for Package</h2>
+    <pre><code>apt search &lt;package&gt;</code></pre>
+    <p>Find packages by name or keyword.</p>
+  </div>
+
+  <div class="section">
+    <h2>📖 13. Show Package Info</h2>
+    <pre><code>apt show &lt;package&gt;</code></pre>
+    <p>Shows package details, dependencies, version, etc.</p>
+  </div>
+
+  <div class="section">
+    <h2>📋 14. List Installed Packages</h2>
+    <pre><code>apt list --installed</code></pre>
+    <p>Displays all installed packages on your system.</p>
+  </div>
+
+  <div class="section">
+    <h2>🚫 15. Hold a Package</h2>
+    <pre><code>sudo apt-mark hold &lt;package&gt;</code></pre>
+    <p>Prevents the package from being upgraded.</p>
+  </div>
+
+  <div class="section">
+    <h2>✅ 16. Unhold a Package</h2>
+    <pre><code>sudo apt-mark unhold &lt;package&gt;</code></pre>
+    <p>Allows the package to be upgraded again.</p>
+  </div>
+
+  <div class="section">
+    <h2>📜 17. View Install History</h2>
+    <pre><code>cat /var/log/apt/history.log</code></pre>
+    <p>Log of installs, upgrades, and removals.</p>
+  </div>
+
+    <p class="note">✨ Built for modern Ubuntu/Debian systems. Don't use ancient <code>apt-get</code> unless you're in a script or on a fossilized distro.</p>
+    <p class="note">🧠 Visit <a href="https://sreeju7733.github.io/linux/apt-cheatsheet">GitHub Page</a> or star the <a href="https://github.com/Sreeju7733/apt-cheatsheet">GitHub Repo</a> to support this project.</p>
+  </main>
+</body>
+</html>
