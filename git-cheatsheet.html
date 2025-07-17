@@ -3,173 +3,132 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="The ultimate Git cheat sheet with explanations, visuals, and best practices. Updated for 2025." />
-  <meta name="keywords" content="git, git cheat sheet, git commands, version control, git tutorial, git guide, git log, git rebase, git commit" />
+  <meta name="description" content="Comprehensive Git commands reference guide for DevOps and Cloud Engineers. Includes Git basics, branching, merging, tagging, cherry-pick, and more." />
+  <meta name="keywords" content="Git Cheatsheet, Git Commands, DevOps Git, Cloud Engineer Git, Git Merge, Git Tag, Git Branch, Git CLI, Git Reference" />
   <meta name="author" content="Sreeju" />
-  <meta property="og:title" content="Git Ultimate Cheatsheet (2025)" />
-  <meta property="og:description" content="Master Git with this complete and modern cheatsheet. Visuals, command explanations, and best practices for developers." />
+  <meta property="og:title" content="Git Cheatsheet for DevOps and Cloud Engineers" />
+  <meta property="og:description" content="A complete guide to essential Git commands tailored for DevOps and Cloud professionals. Covers git init, clone, branch, tag, cherry-pick, merge and more." />
   <meta property="og:type" content="website" />
-  <meta property="og:image" content="https://sreeju7733.github.io/linux/assets/git-cheatsheet-preview.png" />
   <meta property="og:url" content="https://sreeju7733.github.io/linux/git-cheatsheet" />
+  <meta property="og:image" content="https://sreeju7733.github.io/assets/git-cover.png" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Git Ultimate Cheatsheet (2025)" />
-  <meta name="twitter:description" content="A practical Git cheat sheet with visual graphs and real-world examples." />
-  <meta name="twitter:image" content="https://sreeju7733.github.io/linux/assets/git-cheatsheet-preview.png" />
-  <title>Git Ultimate Cheatsheet (2025)</title>
+  <meta name="twitter:title" content="Git Cheatsheet for DevOps and Cloud Engineers" />
+  <meta name="twitter:description" content="Essential Git command reference for professionals in DevOps and cloud integration. Includes all major git operations." />
+  <meta name="twitter:image" content="https://sreeju7733.github.io/assets/git-twitter-cover.png" />
+  <title>Git Cheatsheet for DevOps & Cloud Engineers</title>
   <style>
     body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background-color: #0f0f0f;
-      color: #f8f8f8;
-      line-height: 1.7;
+      font-family: system-ui, sans-serif;
+      line-height: 1.6;
+      background-color: #0d1117;
+      color: #c9d1d9;
       padding: 2rem;
-      max-width: 960px;
-      margin: auto;
     }
     h1, h2, h3 {
-      color: #00ffd5;
-      border-bottom: 2px solid #2a2a2a;
-      padding-bottom: 0.3rem;
-      margin-top: 2rem;
+      color: #58a6ff;
     }
     code {
-      background-color: #1e1e1e;
-      color: #00ff90;
-      padding: 0.2rem 0.4rem;
-      border-radius: 4px;
-      font-family: monospace;
+      background-color: #161b22;
+      padding: 0.2em 0.4em;
+      border-radius: 5px;
+      font-size: 0.95em;
+      color: #d2a8ff;
     }
     pre {
-      background: #1e1e1e;
+      background-color: #161b22;
       padding: 1rem;
-      border-radius: 6px;
+      border-radius: 8px;
       overflow-x: auto;
-      white-space: pre-wrap;
     }
     a {
-      color: #80dfff;
-      text-decoration: none;
-    }
-    a:hover {
-      text-decoration: underline;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 2rem 0;
-    }
-    th, td {
-      padding: 0.75rem;
-      border: 1px solid #333;
-      text-align: left;
-    }
-    th {
-      background-color: #1b1b1b;
-      color: #00ffd5;
-    }
-    .note {
-      font-size: 0.9em;
-      color: #aaa;
+      color: #8b949e;
     }
   </style>
 </head>
 <body>
-  <h1>📘 Git Ultimate Cheatsheet (with Graphs & Explanations)</h1>
+  <h1>🚀 Git Cheatsheet for DevOps & Cloud Engineers</h1>
+  <p>Master Git with this command-by-command reference for real-world cloud and infrastructure workflows. Stay version-controlled, clean, and collaborative.</p>
 
-  <h2>🔧 Configuration</h2>
-  <pre><code>git config user.name "Your Name"
-git config user.email "you@example.com"
-git config init.defaultBranch=main</code></pre>
-  <p><em>Sets your identity and default branch name</em></p>
+  <h2>🔧 Git Basics</h2>
+  <pre><code>git init                     # Initialize a local repo
 
-  <h2>🏗️ Initialize a Repository</h2>
-  <pre><code>git init</code></pre>
-  <p>Creates a new Git repo in the current directory.</p>
+# Clone from remote
+git clone &lt;url&gt;             # Clone remote repo
 
-  <h2>📝 Track and Stage Files</h2>
-  <pre><code>git status
-git add .
-git add &lt;file&gt;
-git diff
-git diff --cached</code></pre>
+# Stage & commit
+git add .                   # Stage all changes
+git commit -m "message"     # Commit with message
 
-  <h2>♻️ Restore / Unstage / Remove Files</h2>
-  <pre><code>git restore --staged &lt;file&gt;
-git rm --cached &lt;file&gt;
-git rm &lt;file&gt;</code></pre>
+# Push / Pull
+git push                    # Push to remote
+git pull                    # Pull from remote
 
-  <h2>🔀 Renaming or Moving Files</h2>
-  <pre><code>git mv old.txt new.txt</code></pre>
+# Check status
+git status                  # Show working tree status
 
-  <h2>✅ Committing</h2>
-  <pre><code>git commit -m "Message"
-git commit -am "Quick commit"</code></pre>
+# Log
+git log                     # View commit history</code></pre>
 
-  <h2>🕵️‍♂️ View Logs & Details</h2>
-  <pre><code>git log
-git log --oneline
-git log --graph --decorate
-git show &lt;commit&gt;
-cat .git/HEAD</code></pre>
+  <h2>🌿 Branching & Merging</h2>
+  <pre><code>git branch                  # List branches
+git branch &lt;name&gt;           # Create new branch
+git checkout &lt;name&gt;         # Switch to branch
+git switch &lt;name&gt;           # Modern switch
 
-  <h2>🌿 Branching</h2>
-  <pre><code>git branch &lt;branch&gt;
-git checkout &lt;branch&gt;
-git checkout -b &lt;branch&gt;
-git branch
-git branch -d &lt;branch&gt;</code></pre>
+git merge &lt;branch&gt;          # Merge a branch into current
+
+# Graph view
+git log --oneline --graph --all</code></pre>
 
   <h2>🍒 Cherry Pick</h2>
-  <pre><code>git cherry-pick &lt;commit&gt;</code></pre>
-  <p><em>Use to apply a single commit from one branch to another</em></p>
+  <pre><code>git cherry-pick &lt;commit&gt;    # Apply commit from another branch</code></pre>
 
-  <h2>🔀 Merging</h2>
-  <pre><code>git merge &lt;branch&gt;
-git merge --abort</code></pre>
+  <h2>🏷️ Tagging</h2>
+  <pre><code>git tag                     # List tags
+git tag v1.0                # Create lightweight tag
+git tag -a v1.0 -m "msg"    # Annotated tag
+git push origin v1.0       # Push tag to remote</code></pre>
 
-  <h2>🚀 Rebase</h2>
-  <pre><code>git rebase &lt;branch&gt;
-git rebase -i HEAD~3</code></pre>
+  <h2>🌍 Remote & Tracking</h2>
+  <pre><code>git remote -v               # Show remotes
+git remote add origin &lt;url&gt;# Add new remote
 
-  <h2>🌿 Tags</h2>
-  <pre><code>git tag
-git tag v1.0
-git tag -a v1.0 -m "Release v1.0"
-git show v1.0
-git push origin v1.0
-git push origin --tags</code></pre>
+git fetch                   # Fetch changes without merge
+git pull --rebase           # Pull with rebase</code></pre>
 
-  <h2>🔥 Undoing Commits</h2>
-  <pre><code>git reset --soft HEAD~1
-git reset --mixed HEAD~1
-git reset --hard HEAD~1</code></pre>
+  <h2>🛠 DevOps-Specific Git Commands</h2>
+  <pre><code># Git stash before switching
+git stash                  # Save uncommitted changes
+git stash pop              # Reapply stashed changes
 
-  <h2>🔎 Git Ignore</h2>
-  <pre><code>*.log
-node_modules/
-.env</code></pre>
+# Clean working tree
+git clean -fd              # Remove untracked files & dirs
 
-  <h2>⚙️ Git Attributes</h2>
-  <pre><code>*.sh text eol=lf
-*.jpg binary</code></pre>
+git reset --hard HEAD      # Reset all local changes
 
-  <h2>🎯 Bonus: Summary Table</h2>
-  <table>
-    <tr><th>Command</th><th>Purpose</th></tr>
-    <tr><td>git init</td><td>Start new Git repo</td></tr>
-    <tr><td>git add</td><td>Stage changes</td></tr>
-    <tr><td>git commit</td><td>Commit staged changes</td></tr>
-    <tr><td>git status</td><td>Check status</td></tr>
-    <tr><td>git log</td><td>View commit history</td></tr>
-    <tr><td>git branch</td><td>Work with branches</td></tr>
-    <tr><td>git merge / rebase</td><td>Combine branches</td></tr>
-    <tr><td>git cherry-pick</td><td>Apply specific commits</td></tr>
-    <tr><td>git tag</td><td>Mark versions</td></tr>
-    <tr><td>git reset / revert</td><td>Undo changes</td></tr>
-    <tr><td>.gitignore</td><td>Ignore certain files</td></tr>
-    <tr><td>.gitattributes</td><td>Control file behavior</td></tr>
-  </table>
+# Bisect to find breaking commit
+git bisect start           # Begin binary search
+git bisect bad             # Mark current as bad
+git bisect good &lt;commit&gt;   # Mark known good commit
 
-  <p class="note">Updated July 2025 · By <a href="https://sreeju7733.github.io">Sreeju</a></p>
+git reflog                 # History of HEAD movements</code></pre>
+
+  <h2>✅ Git Attributes & Ignore</h2>
+  <pre><code># Git ignore
+nano .gitignore            # Add files to ignore
+
+# Git attributes
+nano .gitattributes        # Define merge/diff rules, LFS etc.</code></pre>
+
+  <h2>📊 Git Graph Summary</h2>
+  <pre><code>git log --all --decorate --oneline --graph</code></pre>
+
+  <h2>🌐 Hosting on GitHub/GitLab</h2>
+  <pre><code>git remote add origin git@github.com:username/repo.git
+git push -u origin main    # Push main branch</code></pre>
+
+  <footer>
+    <p>© 2025 Sreeju — DevOps | Cloud | Git PowerUser Mode 💻</p>
+  </footer>
 </body>
 </html>
