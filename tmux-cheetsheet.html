@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="A complete and modern cheat sheet for tmux, tailored for DevOps and Cloud Engineers." />
+  <meta name="keywords" content="tmux, tmux cheat sheet, devops, cloud engineer, terminal, linux productivity" />
+  <meta name="author" content="Sreeju" />
+  <meta property="og:title" content="Modern tmux Cheatsheet for DevOps (2025)" />
+  <meta property="og:description" content="Modern, powerful, and essential tmux guide for terminal power users and DevOps engineers." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="https://sreeju7733.github.io/linux/assets/tmux-cheatsheet-preview.png" />
+  <meta property="og:url" content="https://sreeju7733.github.io/linux/tmux-cheatsheet" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Modern tmux Cheatsheet for DevOps (2025)" />
+  <meta name="twitter:description" content="Master the terminal with this updated and advanced tmux cheat sheet." />
+  <meta name="twitter:image" content="https://sreeju7733.github.io/linux/assets/tmux-cheatsheet-preview.png" />
+  <title>Modern tmux Cheatsheet</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      line-height: 1.6;
+      background-color: #0d1117;
+      color: #c9d1d9;
+      padding: 2rem;
+    }
+    h1, h2, h3 {
+      color: #58a6ff;
+    }
+    code {
+      background-color: #161b22;
+      padding: 0.2em 0.4em;
+      border-radius: 5px;
+      font-size: 0.95em;
+      color: #d2a8ff;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 2rem;
+    }
+    th, td {
+      padding: 0.75rem;
+      border: 1px solid #30363d;
+      text-align: left;
+    }
+    th {
+      background-color: #21262d;
+    }
+    pre {
+      background-color: #161b22;
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+    a {
+      color: #8b949e;
+    }
+  </style>
+</head>
+<body>
+  <h1>tmux Cheatsheet for DevOps and Cloud Engineers (2025)</h1>
+
+  <h2>🧰 Basic Session Commands</h2>
+  <table>
+    <tr><th>Action</th><th>Command</th></tr>
+    <tr><td>Start new tmux session</td><td><code>tmux</code></td></tr>
+    <tr><td>Create named session</td><td><code>tmux new -s [name]</code></td></tr>
+    <tr><td>Detach from session</td><td><code>Ctrl + B</code>, then <code>D</code></td></tr>
+    <tr><td>Attach to last session</td><td><code>tmux a</code></td></tr>
+    <tr><td>Attach to specific session</td><td><code>tmux a -t [name/id]</code></td></tr>
+    <tr><td>List sessions</td><td><code>tmux ls</code></td></tr>
+    <tr><td>Kill current session</td><td><code>tmux kill-session</code></td></tr>
+    <tr><td>Kill specific session</td><td><code>tmux kill-session -t [name/id]</code></td></tr>
+  </table>
+
+  <h2>🪟 Window Management</h2>
+  <table>
+    <tr><th>Action</th><th>Key Combo</th></tr>
+    <tr><td>New window</td><td><code>Ctrl + B</code>, then <code>C</code></td></tr>
+    <tr><td>Next window</td><td><code>Ctrl + B</code>, then <code>N</code></td></tr>
+    <tr><td>Rename window</td><td><code>Ctrl + B</code>, then <code>,</code></td></tr>
+    <tr><td>List windows</td><td><code>Ctrl + B</code>, then <code>W</code></td></tr>
+    <tr><td>Kill window</td><td><code>Ctrl + B</code>, then <code>&</code></td></tr>
+  </table>
+
+  <h2>🧱 Pane Management (Splits)</h2>
+  <table>
+    <tr><th>Action</th><th>Key Combo</th></tr>
+    <tr><td>Split pane vertically</td><td><code>Ctrl + B</code>, then <code>"</code></td></tr>
+    <tr><td>Split pane horizontally</td><td><code>Ctrl + B</code>, then <code>%</code></td></tr>
+    <tr><td>Switch panes</td><td><code>Ctrl + B</code>, then Arrow keys</td></tr>
+    <tr><td>Show pane numbers</td><td><code>Ctrl + B</code>, then <code>q</code></td></tr>
+    <tr><td>Jump to pane by index</td><td><code>Ctrl + B</code>, then <code>q</code> + number</td></tr>
+    <tr><td>Resize pane</td><td><code>Ctrl + B</code> + <code>Ctrl/Alt</code> + Arrow keys</td></tr>
+  </table>
+
+  <h2>🎛️ Layout Presets</h2>
+  <table>
+    <tr><th>Preset</th><th>Key Combo</th></tr>
+    <tr><td>Even vertical layout</td><td><code>Ctrl + B</code>, then <code>Alt + 1</code></td></tr>
+    <tr><td>Even horizontal layout</td><td><code>Ctrl + B</code>, then <code>Alt + 2</code></td></tr>
+    <tr><td>Main-horizontal layout</td><td><code>Ctrl + B</code>, then <code>Alt + 3</code></td></tr>
+    <tr><td>Tiled (4 corners)</td><td><code>Ctrl + B</code>, then <code>Alt + 4</code></td></tr>
+    <tr><td>Custom layout</td><td><code>Ctrl + B</code>, then <code>Alt + 5</code></td></tr>
+  </table>
+
+  <h2>🔁 Persistence & Plugins</h2>
+  <ul>
+    <li><strong>tmux-resurrect</strong> – Save and restore tmux sessions</li>
+    <li><strong>tmux-continuum</strong> – Auto-save + auto-launch</li>
+    <li><strong>tmux-yank</strong> – Improved clipboard support</li>
+    <li><strong>tmux-sensible</strong> – Saner defaults</li>
+  </ul>
+
+  <h2>🧙 Scripting Sessions</h2>
+  <pre><code>#!/bin/bash
+tmux new-session -d -s dev
+
+tmux split-window -h
+tmux send-keys -t 0 'htop' C-m
+tmux send-keys -t 1 'docker ps' C-m
+
+tmux attach-session -t dev</code></pre>
+
+  <h2>📦 YAML Workflows</h2>
+  <p>Use <a href="https://github.com/tmuxinator/tmuxinator" target="_blank">Tmuxinator</a> or <a href="https://github.com/remiprev/teamocil" target="_blank">Teamocil</a> for YAML-based tmux project layouts.</p>
+
+  <h2>📝 Sample .tmux.conf</h2>
+  <pre><code># Vi-style keys
+setw -g mode-keys vi
+
+# Reload config with prefix + r
+bind r source-file ~/.tmux.conf \; display "Reloaded!"
+</code></pre>
+
+  <p><em>Crafted with ❤️ by Sreeju — for terminal pros who live on the edge.</em></p>
+</body>
+</html>
