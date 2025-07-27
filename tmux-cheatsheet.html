@@ -134,6 +134,48 @@ setw -g mode-keys vi
 bind r source-file ~/.tmux.conf \; display "Reloaded!"
 </code></pre>
 
+  <h2>🔐 SSH Multiplexing + tmux = DevOps Heaven 💍</h2>
+  <p>This combo ensures your SSH sessions are fast, stable, and tmux survives disconnections.</p>
+  <h3>Step 1: Edit <code>~/.ssh/config</code></h3>
+  <pre><code>Host your-server.com
+  HostName your-server.com
+  User your_username
+  ControlMaster auto
+  ControlPath ~/.ssh/cm-%r@%h:%p
+  ControlPersist 10m</code></pre>
+
+  <h3>Usage:</h3>
+  <pre><code>ssh your-server.com</code></pre>
+  <p>Now tmux will stay up, even if SSH disconnects. Reconnect anytime and pick up where you left off.</p>
+
+  <h2>🔌 Install & Use <code>tpm</code> (tmux plugin manager)</h2>
+  <h3>Step 1: Clone TPM</h3>
+  <pre><code>git clone https://github.com/tmux-plugins/tpm ~/.tmux/plugins/tpm</code></pre>
+
+  <h3>Step 2: Add plugins to <code>~/.tmux.conf</code></h3>
+  <pre><code>set -g @plugin 'tmux-plugins/tpm'
+set -g @plugin 'tmux-plugins/tmux-sensible'
+set -g @plugin 'tmux-plugins/tmux-resurrect'
+set -g @plugin 'tmux-plugins/tmux-continuum'
+set -g @plugin 'tmux-plugins/tmux-yank'
+set -g @plugin 'tmux-plugins/tmux-prefix-highlight'
+
+run '~/.tmux/plugins/tpm/tpm'</code></pre>
+
+  <h3>Step 3: Install Plugins</h3>
+  <ul>
+    <li>Reload config: <code>Ctrl + B</code>, then <code>:</code> → <code>source-file ~/.tmux.conf</code></li>
+    <li>Install: <code>Ctrl + B</code>, then <code>I</code> (capital i)</li>
+  </ul>
+
+  <h3>Optional: Auto Restore Sessions</h3>
+  <pre><code>set -g @continuum-restore 'on'
+set -g @resurrect-capture-pane-contents 'on'</code></pre>
+  <ul>
+    <li>Save session: <code>Ctrl + B</code>, then <code>Ctrl + S</code></li>
+    <li>Restore session: <code>Ctrl + B</code>, then <code>Ctrl + R</code></li>
+  </ul>
+
   <p><em>Crafted with ❤️ by Sreeju — for terminal pros who live on the edge.</em></p>
 </body>
 </html>
